@@ -16,8 +16,8 @@ There is the mounting tool `mountsfs`
 
 ## todo:
 
-Fix superblock reading on opening filesystem.
-Finnish code for freeing pages so they are properly added to the linked list.
+Create a page allocator function
+Add the creation of a root inode to the mkfs.sfs tool
 
 The filesystem is split into 1024 byte pages:
 
@@ -42,7 +42,7 @@ Contains the data of a file/other object. Linked list style where it has a previ
  
 ## Free page
 
-the first one is pointed to in the header page, and they each point to the next free page. the header of one of these pages is as such:
+The first one is pointed to in the header page, and they each point to the next free page. The header of one of these pages is as such:
 1 byte of `uint8_t page_type = 1`
 8 bytes of `uint64_t next_free_page_index`
 

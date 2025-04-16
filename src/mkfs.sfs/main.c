@@ -17,6 +17,7 @@ int main(int argc, char **argv){
 		return 1;
 	}
 	filesystem.first_free_page_index = (uint64_t)-1;
+	filesystem.page_count = pages_to_create;
 	sfs_update_superblock(&filesystem);
 
 	//generate empty pages of the requested amount
