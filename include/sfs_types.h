@@ -9,10 +9,11 @@
 //uint32_t
 #define SFS_MAGIC_NO 0xC0FFEE
 
-//====== type to represent  the filesystem as a whole ======
+//====== type to represent the filesystem as a whole ======
 struct sfs_struct {
 	uint64_t page_count;
 	int filesystem_fd;
+	uint64_t first_free_page_index;
 };
 typedef struct sfs_struct sfs_t;
 
@@ -22,7 +23,7 @@ enum sfs_page_identifier {
 	SFS_DATA_PAGE,
 	SFS_INODE_PAGE,
 	SFS_FREE_PAGE,
-}:
+};
 struct sfs_inode_page {
 	enum sfs_page_identifier page_type;
 };
@@ -34,18 +35,13 @@ struct sfs_free_page {
 };
 
 
-//====== one union to rule them all ======
-union sfs_page {
-	unsigned char empty_page[SFS_PAGE_SIZE];
-	struct sfs_inode_page inode_page;
-	struct sfs_data_page data_page;
-	struct sfs_free_page free_page;
-};
+//====== errors ======
+#define E_MALFORMED_SUPERBLOCK -2
 
-//====== typedefs to make things easier ======
-typedef struct sfs_page sfs_page_t;
-typedef struct sfs_data_page sfs_data_page_t;
-typedef struct sfs_inode_page sfs_inode_page_t;
-typedef struct sfs_free_page sfs_free_page_t;
+//====== function flags ======
+enum sfs_function_flags {
+	SFS_FUNC_FLAG_SKIP_SUPERBLOCK_CHECK  = (1<<0),
+	SFS_FUNC_FLAG_O_CREATE = (1<<1),
+};
 
 #endif

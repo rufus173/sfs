@@ -21,7 +21,7 @@ The filesystem is split into 1024 byte pages:
 All information stored in the page headers is stored in big endian (network byte order).
 Each page has a header describing 
 
-## Superblock page
+## Superblock
 
 This stores all the information about the filesystem. It is a 256 byte region at the start of the filesystem that contains in the order shown. The rest of the space is padded with 0s
 4 bytes of `uint32_t magic_number`
