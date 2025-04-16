@@ -28,7 +28,6 @@ This stores all the information about the filesystem. It is a 256 byte region at
 8 bytes of `uint64_t page_count`
 8 bytes of `uint64_t first_free_page`
 
-
 ## Inode page
 
 This stores all the information about a file/directory.
