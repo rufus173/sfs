@@ -18,22 +18,9 @@ struct sfs_struct {
 typedef struct sfs_struct sfs_t;
 
 //====== all of the different pages ======
-enum sfs_page_identifier {
-	SFS_HEADER_PAGE,
-	SFS_DATA_PAGE,
-	SFS_INODE_PAGE,
-	SFS_FREE_PAGE,
-};
-struct sfs_inode_page {
-	enum sfs_page_identifier page_type;
-};
-struct sfs_data_page {
-	enum sfs_page_identifier page_type;
-};
-struct sfs_free_page {
-	enum sfs_page_identifier page_type;
-};
-
+#define SFS_FREE_PAGE_IDENTIFIER 1
+#define SFS_DATA_PAGE_IDENTIFIER 2
+#define SFS_INODE_PAGE IDENTIFIER 3
 
 //====== errors ======
 #define E_MALFORMED_SUPERBLOCK -2

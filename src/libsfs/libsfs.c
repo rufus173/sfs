@@ -1,6 +1,9 @@
+#define _LARGEFILE64_SOURCE
+
 #include "../../include/sfs_functions.h"
 #include "../../include/sfs_types.h"
 
+#include <sys/types.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -42,12 +45,34 @@ int sfs_open_fs(sfs_t *filesystem,const char *path,int flags){
 
 	printf("reading superblock\n");
 	//====== attempt to read the superblock ======
-	unsigned char superblock[SFS_SUPERBLOCK_SIZE];
-	ssize_t bytes_read = read(filesystem_fd,superblock,SFS_SUPERBLOCK_SIZE);
-	if (bytes_read < SFS_SUPERBLOCK_SIZE){
+	//read the magic number
+	uint32_t magic_number;
+	ssize_t bytes_read = read(filesystem_fd,&magic_number,sizeof(magic_number));
+	if (bytes_read < sizeof(magic_number)){
+		close(filesystem_fd);
+		return -1;
+	}
+	//verify magic number
+	if (be32toh(magic_number) != SFS_MAGIC_NO){
 		close(filesystem_fd);
 		return E_MALFORMED_SUPERBLOCK;
 	}
+	//read page count
+	uint64_t page_count;
+	bytes_read = read(filesystem_fd,&page_count,sizeof(page_count));
+	if (bytes_read < sizeof(page_count)){
+		close(filesystem_fd);
+		return -1;
+	}
+	filesystem->page_count = be64toh(page_count);
+	//read first free index  
+	uint64_t first_free_page_index;
+	bytes_read = read(filesystem_fd,&first_free_page_index,sizeof(first_free_page_index));
+	if (bytes_read < sizeof(first_free_page_index)){
+		close(filesystem_fd);
+		return -1;
+	}
+	filesystem->first_free_page_index = be64toh(first_free_page_index);
 	return 0;
 }
 int sfs_close_fs(sfs_t *filesystem,int flags){
@@ -86,5 +111,43 @@ int sfs_update_superblock(sfs_t *filesystem){
 	uint64_t first_free_page_index = htobe64(filesystem->first_free_page_index);
 	result = write(filesystem_fd,&first_free_page_index,sizeof(first_free_page_index));
 	if (result < sizeof(first_free_page_index)) return -1;
+	return 0;
+}
+int sfs_seek_to_page(sfs_t *filesystem,uint64_t page){
+	off64_t offset = SFS_SUPERBLOCK_SIZE+(SFS_PAGE_SIZE*page);
+	off64_t offset_result = lseek64(filesystem->filesystem_fd,offset,SEEK_SET);
+	if (offset_result == (off64_t)-1){
+		return -1;
+	}
+	return 0;
+}
+int sfs_free_page(sfs_t *filesystem,uint64_t page){
+	int result = sfs_seek_to_page(filesystem,page);
+	if (result < 0){
+		return result;
+	}
+	//====== point the new free page to the previous first free page ======
+	//if there are no previous free pages
+	uint64_t next_free_page_index; //like NULL at the end of a linked list
+	if (filesystem->first_free_page_index == (uint64_t)-1){
+		filesystem->first_free_page_index = page; //update the head pointer
+		next_free_page_index = htobe64((uint64_t)-1);
+	}else{
+	//if there is a previous free page, point to it and point the first free page pointer here
+		next_free_page_index = htobe64(filesystem->first_free_page_index);
+		filesystem->first_free_page_index = page;
+	}
+	//====== write the page header ======
+	//1 byte of the page type
+	uint8_t page_identifier = SFS_FREE_PAGE_IDENTIFIER;
+	result = write(filesystem->filesystem_fd,&page_identifier,sizeof(uint8_t));
+	if (result < sizeof(page_identifier)){
+		return -1;
+	}
+	//8 bytes of next free page index
+	result = write(filesystem->filesystem_fd,&next_free_page_index,sizeof(next_free_page_index));
+	if (result < sizeof(next_free_page_index)){
+		return -1;
+	}
 	return 0;
 }

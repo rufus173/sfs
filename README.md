@@ -14,16 +14,20 @@ There is the mounting tool `mountsfs`
 
 # Design of the filesystem
 
+## todo:
+
+Fix superblock reading on opening filesystem.
+Finnish code for freeing pages so they are properly added to the linked list.
+
 The filesystem is split into 1024 byte pages:
 
 ## general information
 
 All information stored in the page headers is stored in big endian (network byte order).
-Each page has a header describing 
 
 ## Superblock
 
-This stores all the information about the filesystem. It is a 256 byte region at the start of the filesystem that contains in the order shown. The rest of the space is padded with 0s
+This stores all the information about the filesystem. It is a 256 byte region at the start of the filesystem that contains in the order shown. The rest of the space is padded with 0s.
 4 bytes of `uint32_t magic_number`
 8 bytes of `uint64_t page_count`
 8 bytes of `uint64_t first_free_page`
@@ -34,8 +38,13 @@ This stores all the information about a file/directory.
 
 ## Data page
 
-Contains the data of a file/other object. Linked list style where it has a previous and a next pointer to any relevant continuation pages
+Contains the data of a file/other object. Linked list style where it has a previous and a next pointer to any relevant continuation pages.
  
 ## Free page
 
- the first one is pointed to in the header page, and they each point to the next free page.
+the first one is pointed to in the header page, and they each point to the next free page. the header of one of these pages is as such:
+1 byte of `uint8_t page_type = 1`
+8 bytes of `uint64_t next_free_page_index`
+
+A `(uint64_t)-1` in the next free page index is like the NULL at the end of a linked list, specifying there are no more after this node.
+
