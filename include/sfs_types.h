@@ -17,6 +17,20 @@ struct sfs_struct {
 };
 typedef struct sfs_struct sfs_t;
 
+//====== struct to represent an inode ======
+struct sfs_inode {
+	uint8_t inode_type;
+	uint64_t page;
+	uint64_t parent_inode_pointer;
+	uint64_t pointer_count;
+	uint64_t next_page;
+	uint64_t previous_page;
+	unsigned char name[256];
+}
+typedef struct sfs_inode sfs_inode_t;
+#define SFS_INODE_T_DIR 0
+#define SFS_INODE_T_FILE 1
+
 //====== all of the different pages ======
 #define SFS_FREE_PAGE_IDENTIFIER 1
 #define SFS_DATA_PAGE_IDENTIFIER 2

@@ -16,8 +16,8 @@ There is the mounting tool `mountsfs`
 
 ## todo:
 
-Create a page allocator function
 Add the creation of a root inode to the mkfs.sfs tool
+finnish the update_inode_header function and make a corresponding read_inode_header function
 
 The filesystem is split into 1024 byte pages:
 
@@ -43,8 +43,8 @@ On the root node, the parent pointer points to itself.
 The header region contains:
 1 byte of `uint8_t page_type = 2`
 1 bytes of `uint8_t inode_type`
-8 bytes of `uint8_t parent_inode_pointer`
-8 bytes of `uint64_t size`
+8 bytes of `uint64_t page` (current page where the inode resides (does not change for continuation nodes))
+8 bytes of `uint64_t parent_inode_pointer`
 8 bytes of `uint64_t pointer_count` (for storing the number of data pages or other inodes it points to)
 8 bytes `uint64_t next_page`
 8 bytes `uint64_t previous_page`

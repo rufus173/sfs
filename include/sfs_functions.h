@@ -9,12 +9,16 @@ int sfs_close_fs(sfs_t *filesystem,int flags);
 
 //====== page management ======
 int sfs_free_page(sfs_t *filesystem,uint64_t page);
+uint64_t sfs_allocate_page(sfs_t *filesystem); //returns allocated page index
 int sfs_seek_to_page(sfs_t *filesystem,uint64_t page);
+int sfs_read_page(sfs_t *filesystem,uint64_t page);
+
+//====== inodes ======
+int sfs_update_inode_header(sfs_t *filesystem,uint64_t page,sfs_inode_t *inode);
 
 //====== superblock ======
 int sfs_update_superblock(sfs_t *filesystem);
 
-int sfs_read_page(sfs_t *filesystem,uint64_t page);
 
 //====== errors ======
 void sfs_perror(char *msg,int error);

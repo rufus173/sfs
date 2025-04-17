@@ -20,8 +20,14 @@ int main(int argc, char **argv){
 	filesystem.page_count = pages_to_create;
 	sfs_update_superblock(&filesystem);
 
-	//generate empty pages of the requested amount
-	for (uint64_t i = 0; i < pages_to_create; i++){
+	//====== create the root inode ======
+	//TODO: fill out all the fields
+	sfs_inode_t root_inode{
+		.inode_type = SFS_INODE_T_DIR
+	}
+
+	//====== generate empty pages of the requested amount ======
+	for (uint64_t i = 1; i < pages_to_create; i++){
 		sfs_free_page(&filesystem,i);
 	}
 
