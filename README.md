@@ -34,7 +34,27 @@ This stores all the information about the filesystem. It is a 256 byte region at
 
 ## Inode page
 
-This stores all the information about a file/directory.
+This stores all the information about a file/directory. Inodes can be spread across multiple different pages.
+The way they work is they have a header region describing them, then the rest of the page is `uint64_t` pointers to relevant pages. In the case of a file, data pages, in order for storing the contents of the file. In the case of a directory, other inodes, that are in that directory.
+When the inode spans across multiple pages, the header region is a duplicate, except for the next and previous pointers.
+The next and previous pointers may be `0xFFFFFFFF / (uint64_t)-1` indicating there are no further nodes.
+On the root node, the parent pointer points to itself.
+
+The header region contains:
+1 byte of `uint8_t page_type = 2`
+1 bytes of `uint8_t inode_type`
+8 bytes of `uint8_t parent_inode_pointer`
+8 bytes of `uint64_t size`
+8 bytes of `uint64_t pointer_count` (for storing the number of data pages or other inodes it points to)
+8 bytes `uint64_t next_page`
+8 bytes `uint64_t previous_page`
+256 bytes of a null terminated name
+
+The data region of the inode contains all the pointers to relevant pages. The size of this region depends on the page size
+X bytes of padding to align to a multiple of 8
+8 bytes of `uint64_t page_pointer` (e.g  on bytes 304-311)
+...
+8 bytes of `uint64_t page_pointer` 
 
 ## Data page
 
