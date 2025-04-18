@@ -157,7 +157,7 @@ uint64_t sfs_allocate_page(sfs_t *filesystem){
 	}
 	
 	//====== go to the first free page to find the next free page ======
-	int result = sfs_seek_to_page(filesystem->first_free_page_index);
+	int result = sfs_seek_to_page(filesystem,filesystem->first_free_page_index);
 	if (result < 0){
 		return -1;
 	}
@@ -167,7 +167,7 @@ uint64_t sfs_allocate_page(sfs_t *filesystem){
 		return -1;
 	}
 	uint64_t next_free_page_index;
-	int result = read(filesystem->filesystem_fd,&next_free_page_index,sizeof(next_free_page_index));
+	result = read(filesystem->filesystem_fd,&next_free_page_index,sizeof(next_free_page_index));
 	if (result < 0){
 		return -1;
 	}
@@ -176,7 +176,7 @@ uint64_t sfs_allocate_page(sfs_t *filesystem){
 	//update the next free page
 	filesystem->first_free_page_index = be64toh(next_free_page_index);
 
-	return next_free_page_index;
+	return new_free_page;
 }
 int sfs_update_inode_header(sfs_t *filesystem,uint64_t page,sfs_inode_t *inode){
 	//====== go to the inode ======
@@ -184,19 +184,19 @@ int sfs_update_inode_header(sfs_t *filesystem,uint64_t page,sfs_inode_t *inode){
 	if (result < 0){
 		return -1;
 	}
-	int fd - filesystem->filesystem_fd;
+	int fd = filesystem->filesystem_fd;
 	//====== write the header fields ======
 	//page type
 	uint8_t page_type = 2;
-	int result = write(fd,&page_type,sizeof(page_type));
+	result = write(fd,&page_type,sizeof(page_type));
 	if (result < 0) return -1;
 	//inode type
 	uint8_t inode_type = inode->inode_type;
 	result = write(fd,&inode_type,sizeof(inode_type));
 	if (result < 0) return -1;
 	//page
-	uint64_t page = htobe64(inode->page);
-	result = write(fd,&page,sizeof(page));
+	uint64_t current_page = htobe64(page);
+	result = write(fd,&current_page,sizeof(current_page));
 	if (result < 0) return -1;
 	//parent inode
 	uint64_t parent_inode_pointer = htobe64(inode->parent_inode_pointer);
@@ -204,7 +204,7 @@ int sfs_update_inode_header(sfs_t *filesystem,uint64_t page,sfs_inode_t *inode){
 	if (result < 0) return -1;
 	//pointer count
 	uint64_t pointer_count = htobe64(inode->parent_inode_pointer);
-	result = write(fd,&pointer_count,sizeof(pointer_count))
+	result = write(fd,&pointer_count,sizeof(pointer_count));
 	if (result < 0) return -1;
 	//next page
 	uint64_t next_page = htobe64(inode->next_page);
@@ -217,4 +217,5 @@ int sfs_update_inode_header(sfs_t *filesystem,uint64_t page,sfs_inode_t *inode){
 	//name
 	result = write(fd,inode->name,sizeof(inode->name));
 	if (result < 0) return -1;
+	return 0;
 }

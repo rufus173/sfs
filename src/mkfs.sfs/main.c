@@ -21,10 +21,16 @@ int main(int argc, char **argv){
 	sfs_update_superblock(&filesystem);
 
 	//====== create the root inode ======
-	//TODO: fill out all the fields
-	sfs_inode_t root_inode{
-		.inode_type = SFS_INODE_T_DIR
-	}
+	sfs_inode_t root_inode = {
+		.inode_type = SFS_INODE_T_DIR,
+		.page = 0,
+		.parent_inode_pointer = 0,
+		.pointer_count = 0,
+		.next_page = (uint64_t)-1,
+		.previous_page = (uint64_t)-1,
+		.name = {"/"}
+	};
+	sfs_update_inode_header(&filesystem,0,&root_inode);
 
 	//====== generate empty pages of the requested amount ======
 	for (uint64_t i = 1; i < pages_to_create; i++){

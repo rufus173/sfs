@@ -26,7 +26,7 @@ struct sfs_inode {
 	uint64_t next_page;
 	uint64_t previous_page;
 	unsigned char name[256];
-}
+};
 typedef struct sfs_inode sfs_inode_t;
 #define SFS_INODE_T_DIR 0
 #define SFS_INODE_T_FILE 1
