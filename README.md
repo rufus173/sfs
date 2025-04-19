@@ -16,8 +16,8 @@ There is the mounting tool `mountsfs`
 
 ## todo:
 
-Add the creation of a root inode to the mkfs.sfs tool
-finish the write function and make a corresponding read_inode_header function
+add a propper argument parser to the mountsfs tool.
+get it to open the actual filesystem
 
 The filesystem is split into 1024 byte pages:
 
@@ -58,7 +58,7 @@ X bytes of padding to align to a multiple of 8
 
 ### Root directory
 
-Always stored on page 2 (index 1).
+Always stored on the second page (index 1).
 
 ## Data page
 

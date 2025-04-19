@@ -18,13 +18,13 @@ struct sfs_struct {
 typedef struct sfs_struct sfs_t;
 
 //====== struct to represent an inode ======
-struct sfs_inode {
-	uint8_t inode_type;
+struct __attribute__((__packed__)) sfs_inode {
 	uint64_t page;
 	uint64_t parent_inode_pointer;
 	uint64_t pointer_count;
 	uint64_t next_page;
 	uint64_t previous_page;
+	uint8_t inode_type;
 	unsigned char name[256];
 };
 typedef struct sfs_inode sfs_inode_t;

@@ -14,7 +14,8 @@ int sfs_seek_to_page(sfs_t *filesystem,uint64_t page);
 int sfs_read_page(sfs_t *filesystem,uint64_t page);
 
 //====== inodes ======
-int sfs_update_inode_header(sfs_t *filesystem,uint64_t page,sfs_inode_t *inode);
+int sfs_write_inode_header(sfs_t *filesystem,uint64_t page,sfs_inode_t *inode);
+int sfs_read_inode_headers(sfs_t *filesystem,uint64_t page,sfs_inode_t *inode);
 
 //====== superblock ======
 int sfs_update_superblock(sfs_t *filesystem);

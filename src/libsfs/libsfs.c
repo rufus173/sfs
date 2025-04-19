@@ -178,44 +178,46 @@ uint64_t sfs_allocate_page(sfs_t *filesystem){
 
 	return new_free_page;
 }
-int sfs_update_inode_header(sfs_t *filesystem,uint64_t page,sfs_inode_t *inode){
+int sfs_write_inode_header(sfs_t *filesystem,uint64_t page,sfs_inode_t *inode){
 	//====== go to the inode ======
 	int result = sfs_seek_to_page(filesystem,page);
 	if (result < 0){
 		return -1;
 	}
 	int fd = filesystem->filesystem_fd;
-	//====== write the header fields ======
-	//page type
-	uint8_t page_type = 2;
-	result = write(fd,&page_type,sizeof(page_type));
-	if (result < 0) return -1;
-	//inode type
-	uint8_t inode_type = inode->inode_type;
-	result = write(fd,&inode_type,sizeof(inode_type));
-	if (result < 0) return -1;
-	//page
-	uint64_t current_page = htobe64(page);
-	result = write(fd,&current_page,sizeof(current_page));
-	if (result < 0) return -1;
-	//parent inode
-	uint64_t parent_inode_pointer = htobe64(inode->parent_inode_pointer);
-	result = write(fd,&parent_inode_pointer,sizeof(parent_inode_pointer));
-	if (result < 0) return -1;
-	//pointer count
-	uint64_t pointer_count = htobe64(inode->parent_inode_pointer);
-	result = write(fd,&pointer_count,sizeof(pointer_count));
-	if (result < 0) return -1;
-	//next page
-	uint64_t next_page = htobe64(inode->next_page);
-	result = write(fd,&next_page,sizeof(next_page));
-	if (result < 0) return -1;
-	//previous page
-	uint64_t previous_page = htobe64(inode->previous_page);
-	result = write(fd,&previous_page,sizeof(previous_page));
-	if (result < 0) return -1;
-	//name
-	result = write(fd,inode->name,sizeof(inode->name));
-	if (result < 0) return -1;
+	//====== copy and correct endianness ======
+	//we dont want to modify the users struct
+	sfs_inode_t inode_cpy;
+	memcpy(&inode_cpy,inode,sizeof(sfs_inode_t));
+	inode_cpy.page = htobe64(inode_cpy.page);
+	inode_cpy.parent_inode_pointer = htobe64(inode_cpy.parent_inode_pointer);
+	inode_cpy.pointer_count = htobe64(inode_cpy.pointer_count);
+	inode_cpy.next_page = htobe64(inode_cpy.next_page);
+	inode_cpy.previous_page = htobe64(inode_cpy.previous_page);
+	//====== write the struct ======
+	result = write(fd,&inode_cpy,sizeof(sfs_inode_t));
+	if (result < sizeof(sfs_inode_t)){
+		return -1;
+	}
+	return 0;
+}
+int sfs_read_inode_headers(sfs_t *filesystem,uint64_t page,sfs_inode_t *inode){
+	//====== go to the inode ======
+	int result = sfs_seek_to_page(filesystem,page);
+	if (result < 0){
+		return -1;
+	}
+	int fd = filesystem->filesystem_fd;
+	//====== read into the struct ======
+	result = read(fd,inode,sizeof(sfs_inode_t));
+	if (result < sizeof(sfs_inode_t)){
+		return -1;
+	}
+	//====== correct endianness ======
+	inode->page = be64toh(inode->page);
+	inode->parent_inode_pointer = be64toh(inode->parent_inode_pointer);
+	inode->pointer_count = be64toh(inode->pointer_count);
+	inode->next_page = be64toh(inode->next_page);
+	inode->previous_page = be64toh(inode->previous_page);
 	return 0;
 }
