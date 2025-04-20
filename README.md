@@ -14,7 +14,16 @@ There is the mounting tool `mountsfs`
 
 ## Mountsfs
 
-### passing fuse arguments
+### Arguments
+
+Usage: `mountsfs [options] <filesystem image> <mountpoint>`
+
+Here is a list of arguments:
+ - `-h / --help` : display help text
+ - `-fh` : display fuse help
+ - `-f<fuse argument (without '-')>` : pass argument to fuse (more information in `Passing fuse arguments` section)
+
+### Passing fuse arguments
 
 This can be done through using `-f<fuse argument>`, e.g. passing `-omodules=subdir` would become `-fomodules=subdir`
 
@@ -22,8 +31,8 @@ This can be done through using `-f<fuse argument>`, e.g. passing `-omodules=subd
 
 ## todo:
 
-add a propper argument parser to the mountsfs tool.
-get it to open the actual filesystem
+implement inodes being able to point to continuation pages
+implement inodes storing data
 
 The filesystem is split into 1024 byte pages:
 
