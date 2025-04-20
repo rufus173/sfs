@@ -12,6 +12,8 @@
 #include <fcntl.h>
 #include <endian.h>
 
+#define PERROR(str) (fprintf(stderr,"%d %s: %s\n",__LINE__,__FUNCTION__,strerror(errno)))
+
 const char *sfs_errno_to_str(int result){
 	switch(result){
 	case 0:
@@ -117,6 +119,7 @@ int sfs_seek_to_page(sfs_t *filesystem,uint64_t page){
 	off64_t offset = SFS_SUPERBLOCK_SIZE+(SFS_PAGE_SIZE*page);
 	off64_t offset_result = lseek64(filesystem->filesystem_fd,offset,SEEK_SET);
 	if (offset_result == (off64_t)-1){
+		PERROR("lseek64");
 		return -1;
 	}
 	return 0;

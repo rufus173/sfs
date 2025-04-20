@@ -12,6 +12,12 @@ Use the `-h` / `--help` options on the tools to see how to use them
 There is an `mksfs` command which will create a file containing an empty filesystem of a requested size.
 There is the mounting tool `mountsfs`
 
+## Mountsfs
+
+### passing fuse arguments
+
+This can be done through using `-f<fuse argument>`, e.g. passing `-omodules=subdir` would become `-fomodules=subdir`
+
 # Design of the filesystem
 
 ## todo:
