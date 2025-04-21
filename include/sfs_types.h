@@ -4,6 +4,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
+//====== helpfull macros ======
+#define SFS_CALCULATE_ALIGNMENT_PADDING(structure,type) ((sizeof(type)-(sizeof(structure)%sizeof(type)))%sizeof(type))
+
 #define SFS_PAGE_SIZE 1024
 #define SFS_SUPERBLOCK_SIZE 256
 //uint32_t
@@ -30,6 +33,8 @@ struct __attribute__((__packed__)) sfs_inode {
 typedef struct sfs_inode sfs_inode_t;
 #define SFS_INODE_T_DIR 0
 #define SFS_INODE_T_FILE 1
+#define SFS_INODE_ALIGNED_HEADER_SIZE (SFS_CALCULATE_ALIGNMENT_PADDING(sfs_inode_t,uint64_t)+sizeof(sfs_inode_t))
+#define SFS_INODE_MAX_POINTERS ((SFS_PAGE_SIZE-SFS_INODE_ALIGNED_HEADER_SIZE)/sizeof(uint64_t))
 
 //====== all of the different pages ======
 #define SFS_FREE_PAGE_IDENTIFIER 1

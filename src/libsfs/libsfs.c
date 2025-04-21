@@ -224,3 +224,9 @@ int sfs_read_inode_headers(sfs_t *filesystem,uint64_t page,sfs_inode_t *inode){
 	inode->previous_page = be64toh(inode->previous_page);
 	return 0;
 }
+void sfs_print_info(){
+	printf("page_size: %d\n",SFS_PAGE_SIZE);
+	printf("inode_aligned_header_size: %lu\n",SFS_INODE_ALIGNED_HEADER_SIZE);
+	printf("inode_header_size: %lu\n",sizeof(sfs_inode_t));
+	printf("inode_max_pointers: %lu\n",SFS_INODE_MAX_POINTERS);
+}

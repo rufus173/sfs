@@ -62,6 +62,7 @@ int main(int argc, char **argv){
 			case 'h':
 				//help
 				show_usage(argv[0]);
+				sfs_print_info();
 				return 0;
 		}
 	}

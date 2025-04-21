@@ -21,8 +21,9 @@ int sfs_read_inode_headers(sfs_t *filesystem,uint64_t page,sfs_inode_t *inode);
 int sfs_update_superblock(sfs_t *filesystem);
 
 
-//====== errors ======
+//====== errors and debug ======
 void sfs_perror(char *msg,int error);
+void sfs_print_info();
 
 const char *sfs_errno_to_str(int result);
 #endif

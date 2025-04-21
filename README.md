@@ -33,6 +33,8 @@ This can be done through using `-f<fuse argument>`, e.g. passing `-omodules=subd
 
 implement inodes being able to point to continuation pages
 implement inodes storing data
+implement sfs_inode_new_continuation_page(sfs_t *filesystem,uint64_t inode)
+implement sfs_inode_remove_continuation_page(sfs_t *filesystem,uint64_t continuation_page)
 
 The filesystem is split into 1024 byte pages:
 
