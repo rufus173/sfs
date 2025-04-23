@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <errno.h>
 #include <string.h>
 #include <fcntl.h>
@@ -229,4 +230,54 @@ void sfs_print_info(){
 	printf("inode_aligned_header_size: %lu\n",SFS_INODE_ALIGNED_HEADER_SIZE);
 	printf("inode_header_size: %lu\n",sizeof(sfs_inode_t));
 	printf("inode_max_pointers: %lu\n",SFS_INODE_MAX_POINTERS);
+}
+uint64_t sfs_inode_insert_continuation_page(sfs_t *filesystem,uint64_t page){
+	//====== allocate a new page ======
+	uint64_t continuation_page = sfs_allocate_page();
+	if (inode_page == (uint64_t)-1){
+		return (uint64_t)-1;
+	}
+	//====== read the inode headers we have been provided ======
+	sfs_inode_t previous_inode_page;
+	int result = sfs_read_inode_headers(filesystem,page,&previous_inode_page);
+	if (result < 0){
+		return (uint64_t)-1;
+	}
+	//===== setup inode page =====
+	sfs_inode_t new_inode_page
+	//copy the old page into the new one
+	memcpy(new_inode_page,previous_inode_page,sizeof(sfs_inode_t));
+	new_inode_page.next_page = (uint64_t)-1;
+	//set previous pointer
+	new_inode_page.previous_page = page
+	if (previous_inode_page.next_page != (uint64_t)-1){
+		//====== if there is a page after ======
+		//update the next pointer
+		new_inode_page.next_page = previous_inode_page.next_page;
+		//update the next page to point back here
+		sfs_inode_t previous_next_inode_page;
+		int result = sfs_read_inode_headers(filesystem,previous_inode_page.next_page,previous_next_inode_page);
+		if (result < 0){
+			return (uint64_t)-1;
+		}
+		//point it back here
+		previous_next_inode_page.previous_page = continuation_page;
+		result = sfs_write_inode_headers(filesystem,previous_inode_page.next_page,previous_next_inode_page);
+		if (result < 0){
+			return (uint64_t)-1;
+		}
+	}
+	//====== update the previous inode page to point here ======
+	previous_inode_page.next_page = continuation_page;
+	result = sfs_write_inode_headers(filesystem,page,&previous_inode_page);
+	if (result < 0){
+		return (uint64_t)-1;
+	}
+	//====== write the new inode page ======
+	result = sfs_write_inode_headers(filesystem,continuation_page,&new_inode_page);
+	if (result < 0){
+		return (uint64_t)-1;
+	}
+
+	return continuation_page;
 }

@@ -16,6 +16,8 @@ int sfs_read_page(sfs_t *filesystem,uint64_t page);
 //====== inodes ======
 int sfs_write_inode_header(sfs_t *filesystem,uint64_t page,sfs_inode_t *inode);
 int sfs_read_inode_headers(sfs_t *filesystem,uint64_t page,sfs_inode_t *inode);
+//insert after the given inode page
+uint64_t sfs_inode_insert_continuation_page(sfs_t *filesystem,uint64_t page);
 
 //====== superblock ======
 int sfs_update_superblock(sfs_t *filesystem);
