@@ -29,16 +29,15 @@ This can be done through using `-f<fuse argument>`, e.g. passing `-omodules=subd
 
 # Design of the filesystem
 
-## todo:
-
+## Todo:
+```
 implement inodes being able to point to continuation pages
 implement inodes storing data
-test sfs_inode_insert_continuation_page(sfs_t *filesystem,uint64_t inode)
 implement sfs_inode_remove_continuation_page(sfs_t *filesystem,uint64_t continuation_page)
 create sfs_inode_get_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index)
 create sfs_inode_set_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index)
 create sfs_inode_remove_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index)
-
+```
 The filesystem is split into 1024 byte pages:
 
 ## general information
@@ -57,7 +56,7 @@ This stores all the information about the filesystem. It is a 256 byte region at
 
 This stores all the information about a file/directory. Inodes can be spread across multiple different pages.
 The way they work is they have a header region describing them, then the rest of the page is `uint64_t` pointers to relevant pages. In the case of a file, data pages, in order for storing the contents of the file. In the case of a directory, other inodes, that are in that directory.
-When the inode spans across multiple pages, the header region is a duplicate, except for the next and previous pointers. You SHOULD NOT rely on the duplicate information on continuation pages being up to date, or give a continuation page index as a replacement for an inode index. ALWAYS give the base inode page rather then a continuation page index.
+When the inode spans across multiple pages, the header region is a duplicate, except for the next and previous pointers. You SHOULD NOT rely on the duplicate information on continuation pages being up to date, or give a continuation page index as a replacement for an inode index. ALWAYS give the base inode page rather then a continuation page index. (except `sfs_read_inode_page` and its write counter part)
 The next and previous pointers may be `0xFFFFFFFF / (uint64_t)-1` indicating there are no further nodes.
 On the root node, the parent pointer points to itself.
 

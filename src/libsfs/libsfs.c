@@ -13,7 +13,7 @@
 #include <fcntl.h>
 #include <endian.h>
 
-#define PERROR(str) (fprintf(stderr,"%d %s: %s\n",__LINE__,__FUNCTION__,strerror(errno)))
+#define PERROR(str) (fprintf(stderr,"[%d] %s in %s: %s\n",__LINE__,str,__FUNCTION__,strerror(errno)))
 
 const char *sfs_errno_to_str(int result){
 	switch(result){
@@ -27,7 +27,7 @@ const char *sfs_errno_to_str(int result){
 		return "Unknown error";
 	}
 }
-void sfs_perror(char *msg,int error){
+void sfs_PERROR(char *msg,int error){
 	fprintf(stderr,"%s: %s\n",msg,sfs_errno_to_str(error));
 }
 
@@ -146,17 +146,21 @@ int sfs_free_page(sfs_t *filesystem,uint64_t page){
 	uint8_t page_identifier = SFS_FREE_PAGE_IDENTIFIER;
 	result = write(filesystem->filesystem_fd,&page_identifier,sizeof(uint8_t));
 	if (result < sizeof(page_identifier)){
+		PERROR("write");
 		return -1;
 	}
 	//8 bytes of next free page index
 	result = write(filesystem->filesystem_fd,&next_free_page_index,sizeof(next_free_page_index));
 	if (result < sizeof(next_free_page_index)){
+		PERROR("write");
 		return -1;
 	}
 	return 0;
 }
 uint64_t sfs_allocate_page(sfs_t *filesystem){
 	if (filesystem->first_free_page_index == (uint64_t)-1){
+		errno = ENOMEM;
+		PERROR("allocating page");
 		return -1;
 	}
 	
@@ -168,11 +172,13 @@ uint64_t sfs_allocate_page(sfs_t *filesystem){
 	//skip the page identifier bit
 	off_t offset_result = lseek(filesystem->filesystem_fd,1,SEEK_CUR);
 	if (offset_result == (off_t)-1){
+		PERROR("lseek");
 		return -1;
 	}
 	uint64_t next_free_page_index;
 	result = read(filesystem->filesystem_fd,&next_free_page_index,sizeof(next_free_page_index));
 	if (result < 0){
+		PERROR("read");
 		return -1;
 	}
 	//get the value to return
@@ -186,6 +192,7 @@ int sfs_write_inode_header(sfs_t *filesystem,uint64_t page,sfs_inode_t *inode){
 	//====== go to the inode ======
 	int result = sfs_seek_to_page(filesystem,page);
 	if (result < 0){
+		PERROR("write");
 		return -1;
 	}
 	int fd = filesystem->filesystem_fd;
@@ -201,6 +208,7 @@ int sfs_write_inode_header(sfs_t *filesystem,uint64_t page,sfs_inode_t *inode){
 	//====== write the struct ======
 	result = write(fd,&inode_cpy,sizeof(sfs_inode_t));
 	if (result < sizeof(sfs_inode_t)){
+		PERROR("write");
 		return -1;
 	}
 	return 0;
@@ -215,6 +223,7 @@ int sfs_read_inode_headers(sfs_t *filesystem,uint64_t page,sfs_inode_t *inode){
 	//====== read into the struct ======
 	result = read(fd,inode,sizeof(sfs_inode_t));
 	if (result < sizeof(sfs_inode_t)){
+		PERROR("read");
 		return -1;
 	}
 	//====== correct endianness ======
@@ -233,8 +242,8 @@ void sfs_print_info(){
 }
 uint64_t sfs_inode_insert_continuation_page(sfs_t *filesystem,uint64_t page){
 	//====== allocate a new page ======
-	uint64_t continuation_page = sfs_allocate_page();
-	if (inode_page == (uint64_t)-1){
+	uint64_t continuation_page = sfs_allocate_page(filesystem);
+	if (continuation_page == (uint64_t)-1){
 		return (uint64_t)-1;
 	}
 	//====== read the inode headers we have been provided ======
@@ -244,37 +253,37 @@ uint64_t sfs_inode_insert_continuation_page(sfs_t *filesystem,uint64_t page){
 		return (uint64_t)-1;
 	}
 	//===== setup inode page =====
-	sfs_inode_t new_inode_page
+	sfs_inode_t new_inode_page;
 	//copy the old page into the new one
-	memcpy(new_inode_page,previous_inode_page,sizeof(sfs_inode_t));
+	memcpy(&new_inode_page,&previous_inode_page,sizeof(sfs_inode_t));
 	new_inode_page.next_page = (uint64_t)-1;
 	//set previous pointer
-	new_inode_page.previous_page = page
+	new_inode_page.previous_page = page;
 	if (previous_inode_page.next_page != (uint64_t)-1){
 		//====== if there is a page after ======
 		//update the next pointer
 		new_inode_page.next_page = previous_inode_page.next_page;
 		//update the next page to point back here
 		sfs_inode_t previous_next_inode_page;
-		int result = sfs_read_inode_headers(filesystem,previous_inode_page.next_page,previous_next_inode_page);
+		int result = sfs_read_inode_headers(filesystem,previous_inode_page.next_page,&previous_next_inode_page);
 		if (result < 0){
 			return (uint64_t)-1;
 		}
 		//point it back here
 		previous_next_inode_page.previous_page = continuation_page;
-		result = sfs_write_inode_headers(filesystem,previous_inode_page.next_page,previous_next_inode_page);
+		result = sfs_write_inode_header(filesystem,previous_inode_page.next_page,&previous_next_inode_page);
 		if (result < 0){
 			return (uint64_t)-1;
 		}
 	}
 	//====== update the previous inode page to point here ======
 	previous_inode_page.next_page = continuation_page;
-	result = sfs_write_inode_headers(filesystem,page,&previous_inode_page);
+	result = sfs_write_inode_header(filesystem,page,&previous_inode_page);
 	if (result < 0){
 		return (uint64_t)-1;
 	}
 	//====== write the new inode page ======
-	result = sfs_write_inode_headers(filesystem,continuation_page,&new_inode_page);
+	result = sfs_write_inode_header(filesystem,continuation_page,&new_inode_page);
 	if (result < 0){
 		return (uint64_t)-1;
 	}
