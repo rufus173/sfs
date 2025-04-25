@@ -29,14 +29,17 @@ This can be done through using `-f<fuse argument>`, e.g. passing `-omodules=subd
 
 # Design of the filesystem
 
-## Todo:
+## To-do:
 ```
 implement inodes being able to point to continuation pages
 implement inodes storing data
-implement sfs_inode_remove_continuation_page(sfs_t *filesystem,uint64_t continuation_page)
+test sfs_inode_remove_continuation_page
 create sfs_inode_get_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index)
 create sfs_inode_set_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index)
 create sfs_inode_remove_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index)
+implement the readdir for the fuse fs
+implement the mkdir for the fuse fs
+implement the rmdir for the fuse fs
 ```
 The filesystem is split into 1024 byte pages:
 

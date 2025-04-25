@@ -213,7 +213,7 @@ int sfs_write_inode_header(sfs_t *filesystem,uint64_t page,sfs_inode_t *inode){
 	}
 	return 0;
 }
-int sfs_read_inode_headers(sfs_t *filesystem,uint64_t page,sfs_inode_t *inode){
+int sfs_read_inode_header(sfs_t *filesystem,uint64_t page,sfs_inode_t *inode){
 	//====== go to the inode ======
 	int result = sfs_seek_to_page(filesystem,page);
 	if (result < 0){
@@ -248,7 +248,7 @@ uint64_t sfs_inode_insert_continuation_page(sfs_t *filesystem,uint64_t page){
 	}
 	//====== read the inode headers we have been provided ======
 	sfs_inode_t previous_inode_page;
-	int result = sfs_read_inode_headers(filesystem,page,&previous_inode_page);
+	int result = sfs_read_inode_header(filesystem,page,&previous_inode_page);
 	if (result < 0){
 		return (uint64_t)-1;
 	}
@@ -265,7 +265,7 @@ uint64_t sfs_inode_insert_continuation_page(sfs_t *filesystem,uint64_t page){
 		new_inode_page.next_page = previous_inode_page.next_page;
 		//update the next page to point back here
 		sfs_inode_t previous_next_inode_page;
-		int result = sfs_read_inode_headers(filesystem,previous_inode_page.next_page,&previous_next_inode_page);
+		int result = sfs_read_inode_header(filesystem,previous_inode_page.next_page,&previous_next_inode_page);
 		if (result < 0){
 			return (uint64_t)-1;
 		}
@@ -289,4 +289,53 @@ uint64_t sfs_inode_insert_continuation_page(sfs_t *filesystem,uint64_t page){
 	}
 
 	return continuation_page;
+}
+int sfs_inode_remove_continuation_page(sfs_t *filesystem,uint64_t page){
+	//====== read the given inode to remove ======
+	sfs_inode_t inode_to_remove;
+	int result = sfs_read_inode_header(filesystem,page,&inode_to_remove);
+	if (result < 0){
+		return -1;
+	}
+	//====== update the previous page's next pointer to skip this page ======
+	//verify it has a previous page
+	if (inode_to_remove.previous_page != (uint64_t)-1){
+		//read the previous page
+		sfs_inode_t previous_page;
+		int result = sfs_read_inode_header(filesystem,inode_to_remove.previous_page,&previous_page);
+		if (result < 0){
+			return -1;
+		}
+		//even if the inode to remove has no next pointer (-1), setting the previous page to that value will just set it to -1 because yeah
+		previous_page.next_page = inode_to_remove.next_page;
+		//write the updated page
+		result = sfs_write_inode_header(filesystem,inode_to_remove.previous_page,&previous_page);
+		if (result < 0){
+			return -1;
+		}
+	}
+	//====== update the next page's previous pointer to skip this page  ======
+	//verify it has a next page
+	if (inode_to_remove.next_page != (uint64_t)-1){
+		//(same old stuff as before)
+		//read next page
+		sfs_inode_t next_page;
+		int result = sfs_read_inode_header(filesystem,inode_to_remove.next_page,&next_page);
+		if (result < 0){
+			return -1;
+		}
+
+		next_page.previous_page = inode_to_remove.previous_page;
+		//write the updated page
+		result = sfs_write_inode_header(filesystem,inode_to_remove.next_page,&next_page);
+		if (result < 0){
+			return -1;
+		}
+	}
+	//====== register this page as free ======
+	result = sfs_free_page(filesystem,page);
+	if (result < 0){
+		return -1;
+	}
+	return 0;
 }
