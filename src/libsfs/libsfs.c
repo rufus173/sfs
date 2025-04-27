@@ -339,3 +339,50 @@ int sfs_inode_remove_continuation_page(sfs_t *filesystem,uint64_t page){
 	}
 	return 0;
 }
+uint64_t sfs_inode_get_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index){
+	//====== read the given inode headers ======
+	sfs_inode_t current_inode;
+	int result = sfs_read_inode_header(filesystem,inode,&current_inode);
+	if (result < 0){
+		return (uint64_t)-1;
+	}
+
+	//check pointer is in the range of the max pointer count
+	if (index >= current_inode->pointer_count){
+		errno = EFAULT;
+		return (uint64_t)-1;
+	}
+
+	//calculate which continuation page it is on
+	int continuation_page_target_index = index/SFS_INODE_MAX_POINTERS;
+	int current_page = inode;
+	//====== travel to correct continuation page ======
+	for (int continuation_page_index; continuation_page_index < continuation_page_target_index;){
+		//can we reach the next page?
+		if (current_inode->next_page == (uint64_t)-1){
+			errno = EFAULT;
+			return (uint64_t)-1;
+		}
+		current_page = current_inode->next_page;
+		int result = sfs_read_inode_header(filesystem,current_inode->next_page,&current_inode);
+		if (result < 0){
+			return (uint64_t)-1;
+		}
+	}
+	//====== seek to page then to pointer ======
+	result = sfs_seek_to_page(filesystem,current_page);
+	if (result < 0){
+		return (uint64_t)-1;
+	}
+	result = lseek(filesystem->filesystem_fd,SFS_INODE_ALIGNED_HEADER_SIZE,SEEK_CUR);
+	if (result < 0){
+		return (uint64_t)-1;
+	}
+	//====== read the pointer ======
+	uint64_t pointer;
+	result = read(filesystem->filesystem_fd,&pointer,sizeof(pointer));
+	if (result < 0){
+		return (uint64_t)-1;
+	}
+	return be64toh(pointer);
+}
