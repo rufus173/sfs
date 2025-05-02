@@ -25,7 +25,7 @@ int main(int argc, char **argv){
 		.inode_type = SFS_INODE_T_DIR,
 		.page = 1,
 		.parent_inode_pointer = 1,
-		.pointer_count = 0,
+		.pointer_count = 10,
 		.next_page = (uint64_t)-1,
 		.previous_page = (uint64_t)-1,
 		.name = {"/"}
@@ -37,14 +37,16 @@ int main(int argc, char **argv){
 	for (uint64_t i = 2; i < pages_to_create; i++){
 		sfs_free_page(&filesystem,i);
 	}
+	sfs_inode_set_pointer(&filesystem,1,9,6969);
+	printf("%lu\n",sfs_inode_get_pointer(&filesystem,1,9));
 
 	/* testing --- testing --- testing --- testing --- */
 	uint64_t cont_page = sfs_inode_insert_continuation_page(&filesystem,1);
 	assert(cont_page != -1);
 	sfs_inode_t cont_page_inode;
 	sfs_inode_t root_page;
-	assert(sfs_read_inode_headers(&filesystem,cont_page,&cont_page_inode) == 0);
-	assert(sfs_read_inode_headers(&filesystem,1,&root_page) == 0);
+	assert(sfs_read_inode_header(&filesystem,cont_page,&cont_page_inode) == 0);
+	assert(sfs_read_inode_header(&filesystem,1,&root_page) == 0);
 
 	sfs_close_fs(&filesystem,0);
 	return 0;

@@ -25,6 +25,12 @@ int sfs_read_inode_header(sfs_t *filesystem,uint64_t page,sfs_inode_t *inode);
 uint64_t sfs_inode_insert_continuation_page(sfs_t *filesystem,uint64_t page);
 //remove given continuation page and adjust the others to point to the correct places
 int sfs_inode_remove_continuation_page(sfs_t *filesystem,uint64_t page);
+//sets pointer in an inode at said index. deals with traversing continuation pages automaticaly
+int sfs_inode_set_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index,uint64_t pointer);
+//the same as the set pointer function but returns the pointer value
+uint64_t sfs_inode_get_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index);
+//changes the inode header to reflect the new number and removes or adds continuation pages to fit the new count
+int sfs_inode_realocate_pointers(sfs_t *filesystem,uint64_t inode,uint64_t count);
 
 //====== superblock ======
 //closing the filesystem calls this, but it wont hurt to call this occasionaly

@@ -348,7 +348,7 @@ uint64_t sfs_inode_get_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index){
 	}
 
 	//check pointer is in the range of the max pointer count
-	if (index >= current_inode->pointer_count){
+	if (index >= current_inode.pointer_count){
 		errno = EFAULT;
 		return (uint64_t)-1;
 	}
@@ -357,14 +357,14 @@ uint64_t sfs_inode_get_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index){
 	int continuation_page_target_index = index/SFS_INODE_MAX_POINTERS;
 	int current_page = inode;
 	//====== travel to correct continuation page ======
-	for (int continuation_page_index; continuation_page_index < continuation_page_target_index;){
+	for (int continuation_page_index = 0; continuation_page_index < continuation_page_target_index;){
 		//can we reach the next page?
-		if (current_inode->next_page == (uint64_t)-1){
+		if (current_inode.next_page == (uint64_t)-1){
 			errno = EFAULT;
 			return (uint64_t)-1;
 		}
-		current_page = current_inode->next_page;
-		int result = sfs_read_inode_header(filesystem,current_inode->next_page,&current_inode);
+		current_page = current_inode.next_page;
+		int result = sfs_read_inode_header(filesystem,current_inode.next_page,&current_inode);
 		if (result < 0){
 			return (uint64_t)-1;
 		}
@@ -385,4 +385,105 @@ uint64_t sfs_inode_get_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index){
 		return (uint64_t)-1;
 	}
 	return be64toh(pointer);
+}
+int sfs_inode_set_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index,uint64_t pointer){
+	//====== read the given inode headers ======
+	sfs_inode_t current_inode;
+	int result = sfs_read_inode_header(filesystem,inode,&current_inode);
+	if (result < 0){
+		return -1;
+	}
+
+	//check pointer is in the range of the max pointer count
+	if (index >= current_inode.pointer_count){
+		errno = EFAULT;
+		return -1;
+	}
+
+	//calculate which continuation page it is on
+	int continuation_page_target_index = index/SFS_INODE_MAX_POINTERS;
+	int current_page = inode;
+	//====== travel to correct continuation page ======
+	for (int continuation_page_index = 0; continuation_page_index < continuation_page_target_index;){
+		//can we reach the next page?
+		if (current_inode.next_page == (uint64_t)-1){
+			errno = EFAULT;
+			return -1;
+		}
+		current_page = current_inode.next_page;
+		int result = sfs_read_inode_header(filesystem,current_inode.next_page,&current_inode);
+		if (result < 0){
+			return -1;
+		}
+	}
+	//====== seek to page then to pointer ======
+	result = sfs_seek_to_page(filesystem,current_page);
+	if (result < 0){
+		return -1;
+	}
+	result = lseek(filesystem->filesystem_fd,SFS_INODE_ALIGNED_HEADER_SIZE,SEEK_CUR);
+	if (result < 0){
+		return -1;
+	}
+	//====== write the pointer ======
+	//correct endianness
+	uint64_t corrected_pointer = htobe64(pointer);
+	result = write(filesystem->filesystem_fd,&corrected_pointer,sizeof(pointer));
+	if (result < 0){
+		return -1;
+	}
+	return 0;
+}
+int sfs_inode_realocate_pointers(sfs_t *filesystem,uint64_t inode,uint64_t count){
+	//====== read the inode headers ======
+	sfs_inode_t inode;
+	int result = sfs_read_inode_header(filesystem,inode);
+	if (result < 0){
+		return -1;
+	}
+	uint64_t old_count = inode.count;
+	//====== write the updated header ======
+	inode.pointer_count = count;
+	result = sfs_write_inode_header(filesystem,inode);
+	if (result < 0){
+		return -1;
+	}
+	//====== if the pointer count will not change do nothing ======
+	if (old_count == count){
+		return 0;
+	}
+	//====== add pages if required ======
+	if (count > old_count){
+		//traverse
+		uint64_t page = inode:
+		uint64_t pages_traversed = 0;
+		uint64_t target_pages_to_traverse = count/SFS_INODE_MAX_POINTERS;
+		for (;pages_traversed < target_pages_to_traverse;pages_traversed++){
+			//if there is no next page allocate a new one
+			if (inode.next_page == (uint64_t)-1){
+				page = sfs_inode_insert_continuation_page(filesystem,page);
+				if (page == (uint64_t)-1){
+					return -1;
+				}
+			}else{
+				page = inode.next_page;
+			}
+			int result = sfs_read_inode_header(filesystem,page,inode);
+			if (result < 0){
+				return -1;
+			}
+		}
+	}
+
+	//====== remove pages and rearrange pointers if required ======
+	/* example: removing pointer 56
+	              p1          step 1: pointer count decreased (range now from p1 to p57)
+	              ...
+	              p56 <-+ step 2: swap the pointer to be removed and the last pointer
+	 needs        p57   |
+	 removing --> p58 <-+ this results in the swapped pointer being outside the range of
+	                      accessible pointers (deleted)
+		      ^^^
+		      last pointer
+	*/
 }
