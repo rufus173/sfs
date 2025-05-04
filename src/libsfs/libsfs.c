@@ -436,15 +436,15 @@ int sfs_inode_set_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index,uint64
 }
 int sfs_inode_realocate_pointers(sfs_t *filesystem,uint64_t inode,uint64_t count){
 	//====== read the inode headers ======
-	sfs_inode_t inode;
-	int result = sfs_read_inode_header(filesystem,inode);
+	sfs_inode_t inode_header;
+	int result = sfs_read_inode_header(filesystem,inode,&inode_header);
 	if (result < 0){
 		return -1;
 	}
-	uint64_t old_count = inode.count;
+	uint64_t old_count = inode_header.pointer_count;
 	//====== write the updated header ======
-	inode.pointer_count = count;
-	result = sfs_write_inode_header(filesystem,inode);
+	inode_header.pointer_count = count;
+	result = sfs_write_inode_header(filesystem,inode,&inode_header);
 	if (result < 0){
 		return -1;
 	}
@@ -455,27 +455,80 @@ int sfs_inode_realocate_pointers(sfs_t *filesystem,uint64_t inode,uint64_t count
 	//====== add pages if required ======
 	if (count > old_count){
 		//traverse
-		uint64_t page = inode:
+		uint64_t page = inode;
 		uint64_t pages_traversed = 0;
 		uint64_t target_pages_to_traverse = count/SFS_INODE_MAX_POINTERS;
 		for (;pages_traversed < target_pages_to_traverse;pages_traversed++){
 			//if there is no next page allocate a new one
-			if (inode.next_page == (uint64_t)-1){
+			if (inode_header.next_page == (uint64_t)-1){
 				page = sfs_inode_insert_continuation_page(filesystem,page);
 				if (page == (uint64_t)-1){
 					return -1;
 				}
 			}else{
-				page = inode.next_page;
+				page = inode_header.next_page;
 			}
-			int result = sfs_read_inode_header(filesystem,page,inode);
+			//go to the next page
+			int result = sfs_read_inode_header(filesystem,page,&inode_header);
 			if (result < 0){
 				return -1;
 			}
 		}
+		return 0;
 	}
-
-	//====== remove pages and rearrange pointers if required ======
+	//====== remove pages ======
+	if (count < old_count){
+		//check if any pages have become redundant
+		uint64_t old_page_count = (old_count+SFS_INODE_MAX_POINTERS-1)/SFS_INODE_MAX_POINTERS; //ceil division
+		uint64_t new_page_count = (count+SFS_INODE_MAX_POINTERS-1)/SFS_INODE_MAX_POINTERS; //ceil division
+		//we need at least one page so dont remove it
+		if (new_page_count < 1) return 0;
+		//only traverse if we need to
+		if (new_page_count < old_page_count){
+			sfs_inode_t current_inode_page;
+			int result = sfs_read_inode_header(filesystem,inode,&current_inode_page);
+			if (result < 0){
+				return -1;
+			}
+			//count the current page
+			new_page_count--;
+			//traverse to the last needed page
+			for (;new_page_count > 0;new_page_count--){
+				uint64_t next_page = current_inode_page.next_page;
+				if (next_page == (uint64_t)-1){
+					//if there werent as many pages as expected, nothing more needs to be done
+					return 0;
+				}
+				int result = sfs_read_inode_header(filesystem,next_page,&current_inode_page);
+				if (result < 0){
+					return -1;
+				}
+			}
+			//for each unwanted page remove it
+			for (;;){
+				uint64_t next_page = current_inode_page.next_page;
+				if (next_page == (uint64_t)-1){
+					//all unwanted pages removed
+					break;
+				}
+				int result = sfs_read_inode_header(filesystem,next_page,&current_inode_page);
+				if (result < 0){
+					return -1;
+				}
+				//the actual removal
+				result = sfs_inode_remove_continuation_page(filesystem,next_page);
+				if (result < 0){
+					return -1;
+				}
+			}
+		}
+		return 0;
+	}
+	//====== it shouldnt be possible to get here ======
+	return -1;
+}
+int sfs_inode_remove_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index){
+	//====== rearrange pointers ======
 	/* example: removing pointer 56
 	              p1          step 1: pointer count decreased (range now from p1 to p57)
 	              ...
@@ -486,4 +539,5 @@ int sfs_inode_realocate_pointers(sfs_t *filesystem,uint64_t inode,uint64_t count
 		      ^^^
 		      last pointer
 	*/
+	return 0;
 }

@@ -18,6 +18,7 @@ int sfs_read_page(sfs_t *filesystem,uint64_t page);
 
 //====== inodes ======
 //write the sfs_inode_t to the given page (does not affect inode pointers)
+//both the read and write functions correct endianness from machine to be automaticaly
 int sfs_write_inode_header(sfs_t *filesystem,uint64_t page,sfs_inode_t *inode);
 //same here
 int sfs_read_inode_header(sfs_t *filesystem,uint64_t page,sfs_inode_t *inode);
@@ -31,6 +32,8 @@ int sfs_inode_set_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index,uint64
 uint64_t sfs_inode_get_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index);
 //changes the inode header to reflect the new number and removes or adds continuation pages to fit the new count
 int sfs_inode_realocate_pointers(sfs_t *filesystem,uint64_t inode,uint64_t count);
+// O(1) removal by replacing the requested pointer with the last pointer and decrementing the pointer count
+int sfs_inode_remove_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index);
 
 //====== superblock ======
 //closing the filesystem calls this, but it wont hurt to call this occasionaly
