@@ -543,5 +543,29 @@ int sfs_inode_remove_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index){
 		      ^^^
 		      last pointer
 	*/
+	sfs_inode_t inode_headers;
+	int result = sfs_read_inode_header(filesystem,inode,&inode_headers);
+	if (result < 0){
+		return -1;
+	}
+	if (inode_header.pointer_count == 0){
+		//nothing to do if there are no pointers to remove
+		return 0;
+	}
+	uint64_t final_pointer_index = inode_header.pointer_count-1;
+	//get the final pointer
+	uint64_t final_pointer = sfs_inode_get_pointer(filesystem,uint64_t inode,uint64_t final_pointer_index);
+	if (final_pointer == (uint64_t)-1){
+		return -1;
+	}
+	//replace the requested pointer
+	result = sfs_inode_set_pointer(filesystem,inode,index);
+	if (result < 0){
+		return -1;
+	}
+	result = sfs_inode_realocate_pointers(filesystem,inode,inode_header.pointer_count-1);
+	if (result < 0){
+		return -1;
+	}
 	return 0;
 }
