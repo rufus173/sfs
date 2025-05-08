@@ -33,6 +33,7 @@ uint64_t sfs_inode_get_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index);
 //changes the inode header to reflect the new number and removes or adds continuation pages to fit the new count
 int sfs_inode_realocate_pointers(sfs_t *filesystem,uint64_t inode,uint64_t count);
 // O(1) removal by replacing the requested pointer with the last pointer and decrementing the pointer count
+//automaticaly calls the sfs_inode_reallocate_pointers to shrink the inode for you
 int sfs_inode_remove_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index);
 
 //====== superblock ======

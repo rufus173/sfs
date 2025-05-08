@@ -38,15 +38,17 @@ int main(int argc, char **argv){
 		sfs_free_page(&filesystem,i);
 	}
 	sfs_inode_set_pointer(&filesystem,1,9,6969);
-	printf("%lu\n",sfs_inode_get_pointer(&filesystem,1,9));
 
 	/* testing --- testing --- testing --- testing --- */
-	uint64_t cont_page = sfs_inode_insert_continuation_page(&filesystem,1);
-	assert(cont_page != -1);
-	sfs_inode_t cont_page_inode;
 	sfs_inode_t root_page;
-	assert(sfs_read_inode_header(&filesystem,cont_page,&cont_page_inode) == 0);
 	assert(sfs_read_inode_header(&filesystem,1,&root_page) == 0);
+	assert(sfs_inode_realocate_pointers(&filesystem,1,400) == 0);
+	assert(sfs_read_inode_header(&filesystem,1,&root_page) == 0);
+
+	assert(sfs_inode_set_pointer(&filesystem,1,380,69420) == 0);
+	assert(sfs_read_inode_header(&filesystem,root_page.next_page,&root_page) == 0);
+	printf("%lu\n",sfs_inode_get_pointer(&filesystem,1,380));
+
 
 	sfs_close_fs(&filesystem,0);
 	return 0;

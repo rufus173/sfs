@@ -350,6 +350,7 @@ uint64_t sfs_inode_get_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index){
 	//check pointer is in the range of the max pointer count
 	if (index >= current_inode.pointer_count){
 		errno = EFAULT;
+		PERROR("sfs_inode_get_pointer");
 		return (uint64_t)-1;
 	}
 
@@ -357,10 +358,11 @@ uint64_t sfs_inode_get_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index){
 	int continuation_page_target_index = index/SFS_INODE_MAX_POINTERS;
 	int current_page = inode;
 	//====== travel to correct continuation page ======
-	for (int continuation_page_index = 0; continuation_page_index < continuation_page_target_index;){
+	for (int continuation_page_index = 0; continuation_page_index < continuation_page_target_index;continuation_page_index++){
 		//can we reach the next page?
 		if (current_inode.next_page == (uint64_t)-1){
 			errno = EFAULT;
+			PERROR("sfs_inode_get_pointer");
 			return (uint64_t)-1;
 		}
 		current_page = current_inode.next_page;
@@ -397,6 +399,7 @@ int sfs_inode_set_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index,uint64
 	//check pointer is in the range of the max pointer count
 	if (index >= current_inode.pointer_count){
 		errno = EFAULT;
+		PERROR("sfs_inode_set_pointer");
 		return -1;
 	}
 
@@ -404,10 +407,11 @@ int sfs_inode_set_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index,uint64
 	int continuation_page_target_index = index/SFS_INODE_MAX_POINTERS;
 	int current_page = inode;
 	//====== travel to correct continuation page ======
-	for (int continuation_page_index = 0; continuation_page_index < continuation_page_target_index;){
+	for (int continuation_page_index = 0; continuation_page_index < continuation_page_target_index;continuation_page_index++){
 		//can we reach the next page?
 		if (current_inode.next_page == (uint64_t)-1){
 			errno = EFAULT;
+			PERROR("sfs_inode_set_pointer");
 			return -1;
 		}
 		current_page = current_inode.next_page;
