@@ -37,6 +37,10 @@ int sfs_inode_realocate_pointers(sfs_t *filesystem,uint64_t inode,uint64_t count
 // O(1) removal by replacing the requested pointer with the last pointer and decrementing the pointer count
 //automaticaly calls the sfs_inode_reallocate_pointers to shrink the inode for you
 int sfs_inode_remove_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index);
+//similar to set pointer but resizes inode and appends pointer to the end
+int sfs_inode_add_pointer(sfs_t *filesystem,uint64_t inode,uint64_t pointer);
+//creates an inode under a parent inode
+int sfs_inode_create(sfs_t *filesystem,char name[255],uint8_t type,uint64_t parent);
 
 //====== superblock ======
 //closing the filesystem calls this, but it wont hurt to call this occasionaly

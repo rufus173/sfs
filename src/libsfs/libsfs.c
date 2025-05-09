@@ -542,3 +542,50 @@ int sfs_inode_remove_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index){
 	}
 	return 0;
 }
+int sfs_inode_add_pointer(sfs_t *filesystem,uint64_t inode,uint64_t pointer){
+	//====== get info ======
+	sfs_inode_t inode_headers;
+	int result = sfs_read_inode_header(filesystem,inode,&inode_headers);
+	if (result < 0){
+		return -1;
+	}
+	//====== resize the inode ======
+	result = sfs_inode_realocate_pointers(filesystem,inode,inode_headers.pointer_count+1);
+	if (result < 0){
+		return -1;
+	}
+	//====== set the new pointer ======
+	result = sfs_inode_set_pointer(filesystem,inode,inode_headers.pointer_count,pointer);
+	if (result < 0){
+		return -1;
+	}
+	return 0;
+}
+int sfs_inode_create(sfs_t *filesystem,char name[255],uint8_t type,uint64_t parent){
+	//====== allocate a page ======
+	uint64_t allocated_page = sfs_allocate_page(filesystem);
+	if (allocated_page == (uint64_t)-1){
+		return -1;
+	}
+	//====== create the inode ======
+	sfs_inode_t new_inode = {
+		.inode_type = type,
+		.page = allocated_page,
+		.parent_inode_pointer = parent,
+		.pointer_count = 1,
+		.next_page = (uint64_t)-1,
+		.previous_page = (uint64_t)-1,
+		.name = {""}
+	};
+	memcpy(new_inode.name,name,sizeof(new_inode.name));
+	int result = sfs_write_inode_header(filesystem,allocated_page,&new_inode);
+	if (result < 0){
+		return -1;
+	}
+	//====== add a pointer here from the parent node ======
+	result = sfs_inode_add_pointer(filesystem,parent,allocated_page);
+	if (result < 0){
+		return -1;
+	}
+	return 0;
+}

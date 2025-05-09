@@ -9,7 +9,7 @@ int main(int argc, char **argv){
 		printf("usage: %s <file>\n",argv[0]);
 		return 1;
 	}
-	uint64_t pages_to_create = 10;
+	uint64_t pages_to_create = 1024/**1024*/;
 	sfs_t filesystem;
 	int result = sfs_open_fs(&filesystem,argv[1],SFS_FUNC_FLAG_SKIP_SUPERBLOCK_CHECK | SFS_FUNC_FLAG_O_CREATE);
 	if (result < 0){
@@ -39,6 +39,8 @@ int main(int argc, char **argv){
 	}
 
 	/* testing --- testing --- testing --- testing --- */
+	assert(sfs_inode_create(&filesystem,"epic-bacon",SFS_INODE_T_DIR,1) == 0);
+	/*
 	sfs_inode_t root_page;
 	assert(sfs_read_inode_header(&filesystem,1,&root_page) == 0);
 	assert(sfs_inode_realocate_pointers(&filesystem,1,5) == 0);
@@ -56,8 +58,7 @@ int main(int argc, char **argv){
 	printf("%lu\n",sfs_inode_get_pointer(&filesystem,1,2));
 	printf("%lu\n",sfs_inode_get_pointer(&filesystem,1,3));
 	printf("%lu\n",sfs_inode_get_pointer(&filesystem,1,4));
-
-
+	*/
 	sfs_close_fs(&filesystem,0);
 	return 0;
 }
