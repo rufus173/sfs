@@ -37,17 +37,25 @@ int main(int argc, char **argv){
 	for (uint64_t i = 2; i < pages_to_create; i++){
 		sfs_free_page(&filesystem,i);
 	}
-	sfs_inode_set_pointer(&filesystem,1,9,6969);
 
 	/* testing --- testing --- testing --- testing --- */
 	sfs_inode_t root_page;
 	assert(sfs_read_inode_header(&filesystem,1,&root_page) == 0);
-	assert(sfs_inode_realocate_pointers(&filesystem,1,400) == 0);
+	assert(sfs_inode_realocate_pointers(&filesystem,1,5) == 0);
 	assert(sfs_read_inode_header(&filesystem,1,&root_page) == 0);
 
-	assert(sfs_inode_set_pointer(&filesystem,1,380,69420) == 0);
-	assert(sfs_read_inode_header(&filesystem,root_page.next_page,&root_page) == 0);
-	printf("%lu\n",sfs_inode_get_pointer(&filesystem,1,380));
+	assert(sfs_inode_set_pointer(&filesystem,1,0,101) == 0);
+	assert(sfs_inode_set_pointer(&filesystem,1,1,102) == 0);
+	assert(sfs_inode_set_pointer(&filesystem,1,2,103) == 0);
+	assert(sfs_inode_set_pointer(&filesystem,1,3,104) == 0);
+	assert(sfs_inode_set_pointer(&filesystem,1,4,105) == 0);
+	assert(sfs_inode_remove_pointer(&filesystem,1,2) == 0);
+	//assert(sfs_read_inode_header(&filesystem,1,&root_page) == 0);
+	printf("%lu\n",sfs_inode_get_pointer(&filesystem,1,0));
+	printf("%lu\n",sfs_inode_get_pointer(&filesystem,1,1));
+	printf("%lu\n",sfs_inode_get_pointer(&filesystem,1,2));
+	printf("%lu\n",sfs_inode_get_pointer(&filesystem,1,3));
+	printf("%lu\n",sfs_inode_get_pointer(&filesystem,1,4));
 
 
 	sfs_close_fs(&filesystem,0);

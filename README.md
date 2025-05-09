@@ -33,7 +33,8 @@ This can be done through using `-f<fuse argument>`, e.g. passing `-omodules=subd
 ```
 implement inodes being able to point to continuation pages
 implement inodes storing data
-	test sfs_inode_remove_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index)
+create sfs_inode_create
+create sfs_inode_destroy
 implement the readdir for the fuse fs
 implement the mkdir for the fuse fs
 implement the rmdir for the fuse fs

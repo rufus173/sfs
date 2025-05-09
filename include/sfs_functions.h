@@ -26,6 +26,8 @@ int sfs_read_inode_header(sfs_t *filesystem,uint64_t page,sfs_inode_t *inode);
 uint64_t sfs_inode_insert_continuation_page(sfs_t *filesystem,uint64_t page);
 //remove given continuation page and adjust the others to point to the correct places
 int sfs_inode_remove_continuation_page(sfs_t *filesystem,uint64_t page);
+//helper function used in get and set pointer functions. moves the file cursor to the requested pointer while traversing continuation pages
+int sfs_inode_seek_to_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index);
 //sets pointer in an inode at said index. deals with traversing continuation pages automaticaly
 int sfs_inode_set_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index,uint64_t pointer);
 //the same as the set pointer function but returns the pointer value

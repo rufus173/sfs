@@ -339,19 +339,19 @@ int sfs_inode_remove_continuation_page(sfs_t *filesystem,uint64_t page){
 	}
 	return 0;
 }
-uint64_t sfs_inode_get_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index){
+int sfs_inode_seek_to_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index){
 	//====== read the given inode headers ======
 	sfs_inode_t current_inode;
 	int result = sfs_read_inode_header(filesystem,inode,&current_inode);
 	if (result < 0){
-		return (uint64_t)-1;
+		return -1;
 	}
 
 	//check pointer is in the range of the max pointer count
 	if (index >= current_inode.pointer_count){
 		errno = EFAULT;
-		PERROR("sfs_inode_get_pointer");
-		return (uint64_t)-1;
+		PERROR("current_inode.pointer_count");
+		return -1;
 	}
 
 	//calculate which continuation page it is on
@@ -363,22 +363,31 @@ uint64_t sfs_inode_get_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index){
 		if (current_inode.next_page == (uint64_t)-1){
 			errno = EFAULT;
 			PERROR("sfs_inode_get_pointer");
-			return (uint64_t)-1;
+			return -1;
 		}
 		current_page = current_inode.next_page;
 		int result = sfs_read_inode_header(filesystem,current_inode.next_page,&current_inode);
 		if (result < 0){
-			return (uint64_t)-1;
+			return -1;
 		}
 	}
 	//====== seek to page then to pointer ======
 	result = sfs_seek_to_page(filesystem,current_page);
 	if (result < 0){
-		return (uint64_t)-1;
+		return -1;
 	}
-	result = lseek(filesystem->filesystem_fd,SFS_INODE_ALIGNED_HEADER_SIZE,SEEK_CUR);
+	uint64_t index_in_page = index%SFS_INODE_MAX_POINTERS;
+	result = lseek(filesystem->filesystem_fd,SFS_INODE_ALIGNED_HEADER_SIZE+(sizeof(uint64_t)*index_in_page),SEEK_CUR);
 	if (result < 0){
-		return (uint64_t)-1;
+		PERROR("lseek");
+		return -1;
+	}
+	return 0;
+}
+uint64_t sfs_inode_get_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index){
+	int result = sfs_inode_seek_to_pointer(filesystem,inode,index);
+	if (result < 0){
+		return -1;
 	}
 	//====== read the pointer ======
 	uint64_t pointer;
@@ -389,43 +398,7 @@ uint64_t sfs_inode_get_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index){
 	return be64toh(pointer);
 }
 int sfs_inode_set_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index,uint64_t pointer){
-	//====== read the given inode headers ======
-	sfs_inode_t current_inode;
-	int result = sfs_read_inode_header(filesystem,inode,&current_inode);
-	if (result < 0){
-		return -1;
-	}
-
-	//check pointer is in the range of the max pointer count
-	if (index >= current_inode.pointer_count){
-		errno = EFAULT;
-		PERROR("sfs_inode_set_pointer");
-		return -1;
-	}
-
-	//calculate which continuation page it is on
-	int continuation_page_target_index = index/SFS_INODE_MAX_POINTERS;
-	int current_page = inode;
-	//====== travel to correct continuation page ======
-	for (int continuation_page_index = 0; continuation_page_index < continuation_page_target_index;continuation_page_index++){
-		//can we reach the next page?
-		if (current_inode.next_page == (uint64_t)-1){
-			errno = EFAULT;
-			PERROR("sfs_inode_set_pointer");
-			return -1;
-		}
-		current_page = current_inode.next_page;
-		int result = sfs_read_inode_header(filesystem,current_inode.next_page,&current_inode);
-		if (result < 0){
-			return -1;
-		}
-	}
-	//====== seek to page then to pointer ======
-	result = sfs_seek_to_page(filesystem,current_page);
-	if (result < 0){
-		return -1;
-	}
-	result = lseek(filesystem->filesystem_fd,SFS_INODE_ALIGNED_HEADER_SIZE,SEEK_CUR);
+	int result = sfs_inode_seek_to_pointer(filesystem,inode,index);
 	if (result < 0){
 		return -1;
 	}
@@ -548,22 +521,22 @@ int sfs_inode_remove_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index){
 	if (result < 0){
 		return -1;
 	}
-	if (inode_header.pointer_count == 0){
+	if (inode_headers.pointer_count == 0){
 		//nothing to do if there are no pointers to remove
 		return 0;
 	}
-	uint64_t final_pointer_index = inode_header.pointer_count-1;
+	uint64_t final_pointer_index = inode_headers.pointer_count-1;
 	//get the final pointer
-	uint64_t final_pointer = sfs_inode_get_pointer(filesystem,uint64_t inode,uint64_t final_pointer_index);
+	uint64_t final_pointer = sfs_inode_get_pointer(filesystem,inode,final_pointer_index);
 	if (final_pointer == (uint64_t)-1){
 		return -1;
 	}
 	//replace the requested pointer
-	result = sfs_inode_set_pointer(filesystem,inode,index);
+	result = sfs_inode_set_pointer(filesystem,inode,index,final_pointer);
 	if (result < 0){
 		return -1;
 	}
-	result = sfs_inode_realocate_pointers(filesystem,inode,inode_header.pointer_count-1);
+	result = sfs_inode_realocate_pointers(filesystem,inode,inode_headers.pointer_count-1);
 	if (result < 0){
 		return -1;
 	}
