@@ -160,6 +160,14 @@ static void sfs_opendir(fuse_req_t request,fuse_ino_t ino,struct fuse_file_info 
 	assert(fuse_reply_open(request,file_info) == 0);
 }
 static void sfs_readdir(fuse_req_t request,fuse_ino_t ino,size_t size,off_t offset,struct fuse_file_info *file_info){
+	for (off_t current_offset = 0;;current_offset++){
+		struct stat statbuf;
+		uint64_t current_inode;
+		sfs_inode_t inode;
+		assert(sfs_read_inode_headers(sfs_filesystem,current_inode,&inode) == 0);
+		assert(sfs_stat(current_inode,&statbuf) == 0)
+		fuse_add_direntry(req,buf,bufsize,inode->name,&statbuf,current_offset+1);
+	}
 	printf("readdir requested on inode %lu, requested size %lu\n",ino,size);
 	assert(fuse_reply_buf(request,NULL,0) == 0);
 }
