@@ -35,7 +35,6 @@ int main(int argc, char **argv){
 	};
 	sfs_write_inode_header(&filesystem,1,&root_inode);
 
-
 	//====== generate empty pages of the requested amount ======
 	for (uint64_t i = 2; i < pages_to_create; i++){
 		sfs_free_page(&filesystem,i);

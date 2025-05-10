@@ -39,7 +39,7 @@ int sfs_inode_realocate_pointers(sfs_t *filesystem,uint64_t inode,uint64_t count
 int sfs_inode_remove_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index);
 //similar to set pointer but resizes inode and appends pointer to the end
 int sfs_inode_add_pointer(sfs_t *filesystem,uint64_t inode,uint64_t pointer);
-//creates an inode under a parent inode
+//creates an inode under a parent inode and returns the inode number of the created node
 uint64_t sfs_inode_create(sfs_t *filesystem,char name[255],uint8_t type,uint64_t parent);
 
 //====== superblock ======

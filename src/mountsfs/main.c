@@ -238,3 +238,9 @@ static void sfs_lookup(fuse_req_t request,fuse_ino_t parent,const char *name){
 	//====== if it does not exist ======
 	fuse_reply_err(request,ENOENT);
 }
+static void sfs_mkdir(fuse_req_t request,fuse_ino_t parent,const char name,mode_t mode){
+	//TODO check if filename exists in current directory
+	uint64_t new_inode = sfs_inode_create(sfs_filesystem,name,SFS_INODE_T_DIR,parent);
+	assert(new_inode != (uint64_t)-1);
+	//TODO addd the reply with fuse_reply_entry and fuse_reply_err
+}
