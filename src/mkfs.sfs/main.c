@@ -25,7 +25,7 @@ int main(int argc, char **argv){
 		.inode_type = SFS_INODE_T_DIR,
 		.page = 1,
 		.parent_inode_pointer = 1,
-		.pointer_count = 10,
+		.pointer_count = 0,
 		.next_page = (uint64_t)-1,
 		.previous_page = (uint64_t)-1,
 		.name = {"/"}
@@ -39,7 +39,8 @@ int main(int argc, char **argv){
 	}
 
 	/* testing --- testing --- testing --- testing --- */
-	assert(sfs_inode_create(&filesystem,"epic-bacon",SFS_INODE_T_DIR,1) == 0);
+	char name[256] = "epic-bacon";
+	assert(sfs_inode_create(&filesystem,name,SFS_INODE_T_DIR,1) == 0);
 	/*
 	sfs_inode_t root_page;
 	assert(sfs_read_inode_header(&filesystem,1,&root_page) == 0);

@@ -572,7 +572,7 @@ int sfs_inode_create(sfs_t *filesystem,char name[255],uint8_t type,uint64_t pare
 		.inode_type = type,
 		.page = allocated_page,
 		.parent_inode_pointer = parent,
-		.pointer_count = 1,
+		.pointer_count = 0,
 		.next_page = (uint64_t)-1,
 		.previous_page = (uint64_t)-1,
 		.name = {""}

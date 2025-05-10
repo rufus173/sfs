@@ -129,7 +129,7 @@ int main(int argc, char **argv){
 static int sfs_stat(fuse_ino_t ino, struct stat *statbuf){
 	sfs_inode_t inode;
 	memset(statbuf,0,sizeof(struct stat));
-	assert(sfs_read_inode_headers(sfs_filesystem,ino,&inode) == 0);
+	assert(sfs_read_inode_header(sfs_filesystem,ino,&inode) == 0);
 	statbuf->st_ino = ino;
 	//====== the permissions + filetype ======
 	int mode = 0;
@@ -160,16 +160,30 @@ static void sfs_opendir(fuse_req_t request,fuse_ino_t ino,struct fuse_file_info 
 	assert(fuse_reply_open(request,file_info) == 0);
 }
 static void sfs_readdir(fuse_req_t request,fuse_ino_t ino,size_t size,off_t offset,struct fuse_file_info *file_info){
-	for (off_t current_offset = 0;;current_offset++){
-		struct stat statbuf;
-		uint64_t current_inode;
-		sfs_inode_t inode;
-		assert(sfs_read_inode_headers(sfs_filesystem,current_inode,&inode) == 0);
-		assert(sfs_stat(current_inode,&statbuf) == 0)
-		fuse_add_direntry(req,buf,bufsize,inode->name,&statbuf,current_offset+1);
-	}
 	printf("readdir requested on inode %lu, requested size %lu\n",ino,size);
-	assert(fuse_reply_buf(request,NULL,0) == 0);
+	uint64_t dirent = sfs_inode_get_pointer(sfs_filesystem,file_info->fh,offset);
+	if (dirent == (uint64_t)-1){
+		//====== no more dirents ======
+		printf("--> end of stream\n");
+		assert(fuse_reply_buf(request,NULL,0) == 0);
+	}else{
+		//====== send the next dirent ======
+		struct stat statbuf;
+		sfs_inode_t inode;
+		assert(sfs_read_inode_header(sfs_filesystem,dirent,&inode) == 0);
+		assert(sfs_stat(dirent,&statbuf) == 0);
+		printf("--> inode %lu, name %s\n",dirent,inode.name);
+		//get required buffer size
+		size_t bufsize = fuse_add_direntry(request,NULL,0,inode.name,&statbuf,offset+1);
+		assert(bufsize <= size);
+		char *buf = malloc(bufsize);
+		//pack the buffer
+		assert(fuse_add_direntry(request,buf,bufsize,inode.name,&statbuf,offset+1) <= bufsize);
+		//send the buffer
+		assert(fuse_reply_buf(request,buf,bufsize) == 0);
+		//free the buffer
+		free(buf);
+	}
 }
 static void sfs_releasedir(fuse_req_t request,fuse_ino_t ino,struct fuse_file_info *file_info){
 	//send success

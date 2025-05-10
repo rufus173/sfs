@@ -28,7 +28,7 @@ struct __attribute__((__packed__)) sfs_inode {
 	uint64_t next_page;
 	uint64_t previous_page;
 	uint8_t inode_type;
-	unsigned char name[256];
+	char name[256];
 };
 typedef struct sfs_inode sfs_inode_t;
 #define SFS_INODE_T_DIR 0
