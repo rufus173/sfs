@@ -76,6 +76,13 @@ int sfs_open_fs(sfs_t *filesystem,const char *path,int flags){
 		return -1;
 	}
 	filesystem->first_free_page_index = be64toh(first_free_page_index);
+	//read the current generation number
+	uint64_t current_generation_number;
+	bytes_read = read(filesystem_fd,&current_generation_number,sizeof(current_generation_number));
+	if (bytes_read < sizeof(current_generation_number)){
+		close(filesystem_fd);
+		return -1;
+	}
 	return 0;
 }
 int sfs_close_fs(sfs_t *filesystem,int flags){
@@ -114,6 +121,10 @@ int sfs_update_superblock(sfs_t *filesystem){
 	uint64_t first_free_page_index = htobe64(filesystem->first_free_page_index);
 	result = write(filesystem_fd,&first_free_page_index,sizeof(first_free_page_index));
 	if (result < sizeof(first_free_page_index)) return -1;
+	//8 bytes current generation number
+	uint64_t current_generation_number = htobe64(filesystem->current_generation_number);
+	result = write(filesystem_fd,&current_generation_number,sizeof(current_generation_number));
+	if (result < sizeof(current_generation_number)) return -1;
 	return 0;
 }
 int sfs_seek_to_page(sfs_t *filesystem,uint64_t page){
@@ -205,6 +216,7 @@ int sfs_write_inode_header(sfs_t *filesystem,uint64_t page,sfs_inode_t *inode){
 	inode_cpy.pointer_count = htobe64(inode_cpy.pointer_count);
 	inode_cpy.next_page = htobe64(inode_cpy.next_page);
 	inode_cpy.previous_page = htobe64(inode_cpy.previous_page);
+	inode_cpy.generation_number = htobe64(inode_cpy.generation_number);
 	//====== write the struct ======
 	result = write(fd,&inode_cpy,sizeof(sfs_inode_t));
 	if (result < sizeof(sfs_inode_t)){
@@ -232,6 +244,7 @@ int sfs_read_inode_header(sfs_t *filesystem,uint64_t page,sfs_inode_t *inode){
 	inode->pointer_count = be64toh(inode->pointer_count);
 	inode->next_page = be64toh(inode->next_page);
 	inode->previous_page = be64toh(inode->previous_page);
+	inode->generation_number = be64toh(inode->generation_number);
 	return 0;
 }
 void sfs_print_info(){
@@ -561,11 +574,11 @@ int sfs_inode_add_pointer(sfs_t *filesystem,uint64_t inode,uint64_t pointer){
 	}
 	return 0;
 }
-int sfs_inode_create(sfs_t *filesystem,char name[255],uint8_t type,uint64_t parent){
+uint64_t sfs_inode_create(sfs_t *filesystem,char name[255],uint8_t type,uint64_t parent){
 	//====== allocate a page ======
 	uint64_t allocated_page = sfs_allocate_page(filesystem);
 	if (allocated_page == (uint64_t)-1){
-		return -1;
+		return (uint64_t)-1;
 	}
 	//====== create the inode ======
 	sfs_inode_t new_inode = {
@@ -575,17 +588,19 @@ int sfs_inode_create(sfs_t *filesystem,char name[255],uint8_t type,uint64_t pare
 		.pointer_count = 0,
 		.next_page = (uint64_t)-1,
 		.previous_page = (uint64_t)-1,
+		.generation_number = filesystem->current_generation_number,
 		.name = {""}
 	};
+	filesystem->current_generation_number++;
 	memcpy(new_inode.name,name,sizeof(new_inode.name));
 	int result = sfs_write_inode_header(filesystem,allocated_page,&new_inode);
 	if (result < 0){
-		return -1;
+		return (uint64_t)-1;
 	}
 	//====== add a pointer here from the parent node ======
 	result = sfs_inode_add_pointer(filesystem,parent,allocated_page);
 	if (result < 0){
-		return -1;
+		return (uint64_t)-1;
 	}
-	return 0;
+	return allocated_page;
 }

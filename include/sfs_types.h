@@ -17,6 +17,7 @@ struct sfs_struct {
 	uint64_t page_count;
 	int filesystem_fd;
 	uint64_t first_free_page_index;
+	uint64_t current_generation_number;
 };
 typedef struct sfs_struct sfs_t;
 
@@ -27,6 +28,7 @@ struct __attribute__((__packed__)) sfs_inode {
 	uint64_t pointer_count;
 	uint64_t next_page;
 	uint64_t previous_page;
+	uint64_t generation_number;
 	uint8_t inode_type;
 	char name[256];
 };

@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <assert.h>
+#include <string.h>
 
 int main(int argc, char **argv){
 	if (argc != 2){
@@ -18,6 +19,7 @@ int main(int argc, char **argv){
 	}
 	filesystem.first_free_page_index = (uint64_t)-1;
 	filesystem.page_count = pages_to_create;
+	filesystem.current_generation_number = 1;
 	sfs_update_superblock(&filesystem);
 
 	//====== create the root inode ======
@@ -28,7 +30,8 @@ int main(int argc, char **argv){
 		.pointer_count = 0,
 		.next_page = (uint64_t)-1,
 		.previous_page = (uint64_t)-1,
-		.name = {"/"}
+		.name = {"/"},
+		.generation_number = 0
 	};
 	sfs_write_inode_header(&filesystem,1,&root_inode);
 
@@ -40,7 +43,10 @@ int main(int argc, char **argv){
 
 	/* testing --- testing --- testing --- testing --- */
 	char name[256] = "epic-bacon";
-	assert(sfs_inode_create(&filesystem,name,SFS_INODE_T_DIR,1) == 0);
+	uint64_t p1 = sfs_inode_create(&filesystem,name,SFS_INODE_T_DIR,1);
+	assert(p1 != (uint64_t)-1);
+	strcpy(name,"amazing_bacon");
+	assert(sfs_inode_create(&filesystem,name,SFS_INODE_T_DIR,p1) != (uint64_t)-1);
 	/*
 	sfs_inode_t root_page;
 	assert(sfs_read_inode_header(&filesystem,1,&root_page) == 0);

@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <getopt.h>
+#include <errno.h>
 
 #define FUSE_ROOT_INODE 1
 
@@ -19,6 +20,7 @@ static void sfs_opendir(fuse_req_t request,fuse_ino_t ino,struct fuse_file_info 
 static void sfs_readdir(fuse_req_t request,fuse_ino_t ino,size_t size,off_t offset,struct fuse_file_info *file_info);
 static void sfs_releasedir(fuse_req_t request,fuse_ino_t ino,struct fuse_file_info *file_info);
 static void sfs_getattr(fuse_req_t request,fuse_ino_t ino,struct fuse_file_info *file_info);
+static void sfs_lookup(fuse_req_t request,fuse_ino_t parent,const char *name);
 static void show_usage(char *name);
 
 //====== prototypes for sfs_lowlevel_operations ======
@@ -26,7 +28,8 @@ struct fuse_lowlevel_ops sfs_lowlevel_operations = {
 	.opendir = sfs_opendir,
 	.readdir = sfs_readdir,
 	.releasedir = sfs_releasedir,
-	.getattr = sfs_getattr
+	.getattr = sfs_getattr,
+	.lookup = sfs_lookup
 };
 
 sfs_t *sfs_filesystem;
@@ -160,19 +163,20 @@ static void sfs_opendir(fuse_req_t request,fuse_ino_t ino,struct fuse_file_info 
 	assert(fuse_reply_open(request,file_info) == 0);
 }
 static void sfs_readdir(fuse_req_t request,fuse_ino_t ino,size_t size,off_t offset,struct fuse_file_info *file_info){
-	printf("readdir requested on inode %lu, requested size %lu\n",ino,size);
-	uint64_t dirent = sfs_inode_get_pointer(sfs_filesystem,file_info->fh,offset);
-	if (dirent == (uint64_t)-1){
+	//printf("readdir requested on inode %lu, requested size %lu\n",ino,size);
+	//====== read the pointer count ======
+	sfs_inode_t inode;
+	assert(sfs_read_inode_header(sfs_filesystem,file_info->fh,&inode) == 0);
+	if (offset >= inode.pointer_count){
 		//====== no more dirents ======
-		printf("--> end of stream\n");
 		assert(fuse_reply_buf(request,NULL,0) == 0);
 	}else{
 		//====== send the next dirent ======
+		uint64_t dirent = sfs_inode_get_pointer(sfs_filesystem,file_info->fh,offset);
 		struct stat statbuf;
-		sfs_inode_t inode;
 		assert(sfs_read_inode_header(sfs_filesystem,dirent,&inode) == 0);
 		assert(sfs_stat(dirent,&statbuf) == 0);
-		printf("--> inode %lu, name %s\n",dirent,inode.name);
+		printf("readdir request for inode %lu, name %s\n",dirent,inode.name);
 		//get required buffer size
 		size_t bufsize = fuse_add_direntry(request,NULL,0,inode.name,&statbuf,offset+1);
 		assert(bufsize <= size);
@@ -190,6 +194,7 @@ static void sfs_releasedir(fuse_req_t request,fuse_ino_t ino,struct fuse_file_in
 	assert(fuse_reply_err(request,0) == 0);
 }
 static void sfs_getattr(fuse_req_t request,fuse_ino_t ino,struct fuse_file_info *file_info){
+	printf("getattr requested on inode %lu\n",ino);
 	//send the gathered attribute back to the kernel
 	struct stat attr;
 	assert(sfs_stat(ino,&attr) == 0);
@@ -197,4 +202,39 @@ static void sfs_getattr(fuse_req_t request,fuse_ino_t ino,struct fuse_file_info 
 }
 static void show_usage(char *name){
 	printf("usage: %s [options] <filesystem image> <mountpoint>\n",name);
+}
+static void sfs_lookup(fuse_req_t request,fuse_ino_t parent,const char *name){
+	printf("lookup requested on parent %lu for %s\n",parent,name);
+	//====== check parent is a directory ======
+	sfs_inode_t inode;
+	assert(sfs_read_inode_header(sfs_filesystem,parent,&inode) == 0);
+	if (inode.inode_type != SFS_INODE_T_DIR){
+		fuse_reply_err(request,ENOTDIR);
+		return;
+	}
+	//====== itterate through all the entries in a directory ======
+	for (uint64_t i = 0; i < inode.pointer_count;i++){
+		uint64_t sub_inode_pointer = sfs_inode_get_pointer(sfs_filesystem,parent,i);
+		assert(sub_inode_pointer != (uint64_t)-1);
+		sfs_inode_t sub_inode;
+		assert(sfs_read_inode_header(sfs_filesystem,sub_inode_pointer,&sub_inode) == 0);
+		if (strcmp(sub_inode.name,name) == 0){
+			//====== directory found ======
+			//generate the dir entry
+			struct fuse_entry_param entry = {
+				.ino = sub_inode_pointer,
+				.generation = sub_inode.generation_number,
+				.attr_timeout = 1.0,
+				.entry_timeout = 1.0,
+			};
+			//fill in the stat struct
+			assert(sfs_stat(sub_inode_pointer,&entry.attr) == 0);
+			//send it off
+			fuse_reply_entry(request,&entry);
+			//leave
+			return;
+		}
+	}
+	//====== if it does not exist ======
+	fuse_reply_err(request,ENOENT);
 }

@@ -53,6 +53,7 @@ This stores all the information about the filesystem. It is a 256 byte region at
 4 bytes of `uint32_t magic_number`
 8 bytes of `uint64_t page_count`
 8 bytes of `uint64_t first_free_page`
+8 bytes of `uint64_t current_generation_number`
 
 ## Inode page
 
@@ -61,6 +62,7 @@ The way they work is they have a header region describing them, then the rest of
 When the inode spans across multiple pages, the header region is a duplicate, except for the next and previous pointers. You SHOULD NOT rely on the duplicate information on continuation pages being up to date, or give a continuation page index as a replacement for an inode index. ALWAYS give the base inode page rather then a continuation page index. (except `sfs_read_inode_page` and its write counter part)
 The next and previous pointers may be `0xFFFFFFFF / (uint64_t)-1` indicating there are no further nodes.
 On the root node, the parent pointer points to itself.
+Every time an inode is created, the current generation number is set as the generation number and then incremented by one.
 
 The header region contains:
 8 bytes of `uint64_t page` (current page where the inode resides (does not change for continuation nodes))
@@ -68,6 +70,7 @@ The header region contains:
 8 bytes of `uint64_t pointer_count` (for storing the number of data pages or other inodes it points to)
 8 bytes `uint64_t next_page`
 8 bytes `uint64_t previous_page`
+8 bytes of `uint64_t generation_number` (unique for every inode ever created, even if it shares an inode number with a deleted inode)
 1 bytes of `uint8_t inode_type`
 256 bytes of a null terminated name
 
