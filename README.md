@@ -96,3 +96,38 @@ The first one is pointed to in the header page, and they each point to the next 
 
 A `(uint64_t)-1` in the next free page index is like the NULL at the end of a linked list, specifying there are no more after this node.
 
+# Design of the FUSE driver
+
+## Inode lookup count implementation
+
+It is simply an array of `MAX_REFERENCED_INODES` pointers to `struct referenced_inode`.
+```
+struct referenced_inode {
+	uint64_t inode;
+	int lookup_count;
+	void *destruction_data;
+	//if null, no action will be taken, else this will be called when lookup count reaches 0
+	//                           destruction_data  inode
+	void (*destruction_function)(void *,           uint64_t);
+};
+```
+
+Calling `int increase_inode_reference_count(uint64_t inode,uint64_t count)` will increase the reference count (and create the relevant structure and data).
+Calling `int reduce_inode_referebce_count`
+
+## Open Inode tracker
+
+This tracks all the open inodes. Stored in a binary search tree (sorted by inode)
+
+# Binary search tree library
+
+The library operates on the principles of data being pointed to in a void pointer in each node. It requires you to pass your own functions as parameters such as for comparing if a node is equal to a value or turning a data pointer into an integer value
+
+```
+struct bst_node {
+};
+//returns the node pointer rather then the data pointer
+static struct bst_node *bst_find_node();
+int bst_new_node();
+```
+
