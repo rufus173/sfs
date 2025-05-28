@@ -123,11 +123,49 @@ This tracks all the open inodes. Stored in a binary search tree (sorted by inode
 
 The library operates on the principles of data being pointed to in a void pointer in each node. It requires you to pass your own functions as parameters such as for comparing if a node is equal to a value or turning a data pointer into an integer value
 
+## Creating a new tree with `bst_new()`
+
+This function allocates and returns a `BST *` that can then be passed to other functions in the library. It takes one argument of user defined functions, for which the struct can be found in the relevant data structures section.
+
+### `int datacmp(void *a,void *b)`
+
+This function will be passed 2 data pointers, and is expected to return:
+ - a value less than 0 if a < b
+ - a value greater than 0 if a > b
+ - 0 if a == b
+It is up to the user how they want to decide how to classify if their data is less than, greater than, or equal to another piece of their given data. E.g. If the data is a struct, some sort of value in the struct can be compared, or if it is an integer pointer, a can simply be subtracted from b.
+
+### `void free_data(void *data)`
+
+This is called when the tree is destroyed, and given a piece of data, should free it if necessary. You may provide NULL instead of a function, in which case it will not be called.
+
+## Destroying a tree
+
+You can call `bst_delete_all_nodes()` to delete all the nodes in a tree but keep the tree itself, or `bst_delete()` to free any data associated with the tree. `bst_delete()` calls `bst_delete_all_nodes()`.
+
+## Adding nodes with `bst_new_node()`
+
+Given a data pointer, it will insert it into the correct position in the tree
+
+## Relevant data structures
+
+
 ```
 struct bst_node {
+	void *data;
+	struct bst_node *parent;
+	struct bst_node *left;
+	struct bst_node *right;
 };
-//returns the node pointer rather then the data pointer
-static struct bst_node *bst_find_node();
-int bst_new_node();
+struct bst { //typedef'd to "BST"
+	struct bst_node *root;
+	struct bst_user_functions *user_functions;
+};
+struct bst_user_functions {
+	//should return less then 0 for a is < b, 0 for a == b, and > 0 for a > b
+	int (*datacmp)(void *,void *);
+	void (*free_data)(void *);
+	void (*print_data)(void *);
+};
 ```
 
