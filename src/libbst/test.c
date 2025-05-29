@@ -23,6 +23,8 @@ int main(int argc, char **argv){
 	}
 	int *data = malloc(sizeof(int));
 	*data = 22;
+	int match = 83;
+	bst_delete_node(bst,bst_find_node(bst,&match));
 	bst_new_node(bst,data);
 	printf("\n");
 	bst_delete_node(bst,bst->root->left->left);

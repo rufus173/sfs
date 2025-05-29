@@ -147,3 +147,18 @@ int bst_delete_node(BST *bst,struct bst_node *node){
 		free(node);
 	}
 }
+struct bst_node *bst_find_node(BST *bst,void *data){
+	for (struct bst_node *current_node = bst->root;;){
+		if (bst->user_functions->datacmp(current_node->data,data) == 0){
+			return current_node;
+		}
+		else if (bst->user_functions->datacmp(current_node->data,data) < 0){
+			if (current_node->left == NULL) return NULL;
+			else current_node = current_node->left;
+		}
+		else if (bst->user_functions->datacmp(current_node->data,data) > 0){
+			if (current_node->left == NULL) return NULL;
+			else current_node = current_node->right;
+		}
+	}
+}
