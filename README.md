@@ -100,7 +100,7 @@ A `(uint64_t)-1` in the next free page index is like the NULL at the end of a li
 
 ## Inode lookup count implementation
 
-It is simply an array of `MAX_REFERENCED_INODES` pointers to `struct referenced_inode`.
+This is stored in a binary search tree and sorted by inode.
 ```
 struct referenced_inode {
 	uint64_t inode;
@@ -114,6 +114,19 @@ struct referenced_inode {
 
 Calling `int increase_inode_reference_count(uint64_t inode,uint64_t count)` will increase the reference count (and create the relevant structure and data).
 Calling `int reduce_inode_referebce_count`
+
+## Opening and reading directories implementation
+
+Calling opendir simply caches the current contents of the directory at that instant, stored in an array of:
+```
+struct opendir {
+	uint64_t opened_dir_inode;
+	size_t inode_count;
+	uint64_t inodes[];
+};
+```
+All future calls to readdir using the same handle will read into the cache, in order to bypass race conditions where an inode in a directory is removed after some of the directory is read, causing it to skip over unrelated entries due to the nature of how inodes are deleted.
+Closing the dir simply frees the allocated space.
 
 ## Open Inode tracker
 
