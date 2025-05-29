@@ -26,9 +26,9 @@ static void sfs_releasedir(fuse_req_t request,fuse_ino_t ino,struct fuse_file_in
 static void sfs_getattr(fuse_req_t request,fuse_ino_t ino,struct fuse_file_info *file_info);
 static void sfs_lookup(fuse_req_t request,fuse_ino_t parent,const char *name);
 static void show_usage(char *name);
-static int referenced_inodes_bst_cmp(void *a,void *b);
-static int increase_inode_ref_count(uint64_t inode, int count);
-static void print_referenced_inode(void *);
+int referenced_inodes_bst_cmp(void *a,void *b);
+int increase_inode_ref_count(uint64_t inode, int count);
+void print_referenced_inode(void *);
 uint64_t generate_unique_runid();
 struct open_dir_tracker *initialise_open_dir_tracker();
 
@@ -51,12 +51,12 @@ struct referenced_inode {
 struct cached_dirent {
 	struct stat statbuf;
 	char name[SFS_MAX_FILENAME_SIZE];
-}
+};
 struct cached_directory {
 	uint64_t inode;
 	uint64_t dirent_count;
 	struct cached_dirent *dirent_array;
-}
+};
 
 //====== globals ======
 sfs_t *sfs_filesystem;
@@ -77,7 +77,8 @@ int main(int argc, char **argv){
 	sfs_filesystem = &filesystem;
 	struct bst_user_functions bst_funcs = {
 		.free_data = free,
-		.datacmp = referenced_inodes_bst_cmp
+		.datacmp = referenced_inodes_bst_cmp,
+		.print_data = print_referenced_inode
 	};
 	referenced_inodes = bst_new(&bst_funcs);
 	cached_dirents = table_new(MAX_OPEN_DIRS);
@@ -197,7 +198,7 @@ static int sfs_stat(fuse_ino_t ino, struct stat *statbuf){
 }
 static void sfs_opendir(fuse_req_t request,fuse_ino_t ino,struct fuse_file_info *file_info){
 	printf("opendir requested on inode %lu\n",ino);
-	//setup cache
+	//====== setup cache ======
 	int cache_index = table_allocate_index(cached_dirents);
 	if (cache_index == -1){
 		assert(fuse_reply_err(request,EMFILE) == 0);
@@ -205,31 +206,40 @@ static void sfs_opendir(fuse_req_t request,fuse_ino_t ino,struct fuse_file_info 
 	}
 	struct cached_directory *directory_cache = malloc(sizeof(struct cached_directory));
 	table_set_data(cached_dirents,cache_index,directory_cache);
-	//send it off
+	//read the parent inode headers
+	sfs_inode_t inode;
+	assert(sfs_read_inode_header(sfs_filesystem,ino,&inode) == 0);
+	directory_cache->inode = ino;
+	directory_cache->dirent_count = inode.pointer_count;
+	directory_cache->dirent_array = malloc(sizeof(struct cached_dirent)*inode.pointer_count);
+	//====== cache all the dirents ======
+	for (uint64_t pointer_index = 0; pointer_index < inode.pointer_count; pointer_index++){
+		uint64_t dirent = sfs_inode_get_pointer(sfs_filesystem,ino,pointer_index);
+		assert(sfs_stat(dirent,&directory_cache->dirent_array[pointer_index].statbuf) == 0);
+		//read the name
+		sfs_inode_t inode;
+		assert(sfs_read_inode_header(sfs_filesystem,dirent,&inode) == 0);
+		memcpy(directory_cache->dirent_array[pointer_index].name,inode.name,SFS_MAX_FILENAME_SIZE);
+	}
+
+	//====== send it off ======
 	file_info->fh = cache_index;
 	assert(fuse_reply_open(request,file_info) == 0);
 }
 static void sfs_readdir(fuse_req_t request,fuse_ino_t ino,size_t size,off_t offset,struct fuse_file_info *file_info){
-	//printf("readdir requested on inode %lu, requested size %lu\n",ino,size);
-	//====== read the pointer count ======
-	sfs_inode_t inode;
-	assert(sfs_read_inode_header(sfs_filesystem,file_info->fh,&inode) == 0);
-	if (offset >= inode.pointer_count){
+	//====== read the cache ======
+	struct cached_directory *directory_cache = table_get_data(cached_dirents,file_info->fh);
+	if (offset >= directory_cache->dirent_count){
 		//====== no more dirents ======
 		assert(fuse_reply_buf(request,NULL,0) == 0);
 	}else{
 		//====== send the next dirent ======
-		uint64_t dirent = sfs_inode_get_pointer(sfs_filesystem,file_info->fh,offset);
-		struct stat statbuf;
-		assert(sfs_read_inode_header(sfs_filesystem,dirent,&inode) == 0);
-		assert(sfs_stat(dirent,&statbuf) == 0);
-		printf("readdir request for inode %lu, name %s\n",dirent,inode.name);
 		//get required buffer size
-		size_t bufsize = fuse_add_direntry(request,NULL,0,inode.name,&statbuf,offset+1);
+		size_t bufsize = fuse_add_direntry(request,NULL,0,directory_cache->dirent_array[offset].name,&directory_cache->dirent_array[offset].statbuf,offset+1);
 		assert(bufsize <= size);
 		char *buf = malloc(bufsize);
 		//pack the buffer
-		assert(fuse_add_direntry(request,buf,bufsize,inode.name,&statbuf,offset+1) <= bufsize);
+		assert(fuse_add_direntry(request,buf,bufsize,directory_cache->dirent_array[offset].name,&directory_cache->dirent_array[offset].statbuf,offset+1) <= bufsize);
 		//send the buffer
 		assert(fuse_reply_buf(request,buf,bufsize) == 0);
 		//free the buffer
@@ -238,10 +248,10 @@ static void sfs_readdir(fuse_req_t request,fuse_ino_t ino,size_t size,off_t offs
 }
 static void sfs_releasedir(fuse_req_t request,fuse_ino_t ino,struct fuse_file_info *file_info){
 	//free all the cached data
-	struct cached_directory *directory_cache = table_get_data(cached_dirents);
+	struct cached_directory *directory_cache = table_get_data(cached_dirents,file_info->fh);
 	free(directory_cache->dirent_array);
 	free(directory_cache);
-	table_free_index(cached_directory,file_info->fh);
+	table_free_index(cached_dirents,file_info->fh);
 	//send success
 	assert(fuse_reply_err(request,0) == 0);
 }
@@ -298,14 +308,14 @@ static void sfs_mkdir(fuse_req_t request,fuse_ino_t parent,const char name,mode_
 	//assert(new_inode != (uint64_t)-1);
 	//TODO addd the reply with fuse_reply_entry and fuse_reply_err
 }
-static int referenced_inodes_bst_cmp(void *a,void *b){
+int referenced_inodes_bst_cmp(void *a,void *b){
 	int value;
 	struct referenced_inode *inode_a = a;
 	struct referenced_inode *inode_b = b;
 	value = inode_b->inode - inode_a->inode;
 	return value;
 }
-static int increase_inode_ref_count(uint64_t inode, int count){
+int increase_inode_ref_count(uint64_t inode, int count){
 	//====== create node to hold ref count if needed ======
 	struct referenced_inode *referenced_inode_to_match = malloc(sizeof(struct referenced_inode));
 	memset(referenced_inode_to_match,0,sizeof(struct referenced_inode));
@@ -322,7 +332,7 @@ static int increase_inode_ref_count(uint64_t inode, int count){
 	ref_count_node->reference_count += inode;
 	return 0;
 }
-static void print_referenced_inode(void *data){
+void print_referenced_inode(void *data){
 	struct referenced_inode *inode_reference = data;
 	printf("(%lu - %d)\n",inode_reference->inode,inode_reference->reference_count);
 }

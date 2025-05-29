@@ -151,7 +151,7 @@ int bst_delete_node(BST *bst,struct bst_node *node){
 	return 0;
 }
 struct bst_node *bst_find_node(BST *bst,void *data){
-	for (struct bst_node *current_node = bst->root;;){
+	for (struct bst_node *current_node = bst->root; current_node != NULL;){
 		if (bst->user_functions->datacmp(current_node->data,data) == 0){
 			return current_node;
 		}
@@ -164,4 +164,5 @@ struct bst_node *bst_find_node(BST *bst,void *data){
 			else current_node = current_node->right;
 		}
 	}
+	return NULL;
 }
