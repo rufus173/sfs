@@ -1,5 +1,6 @@
 #include "../../include/sfs_types.h"
 #include "../../include/sfs_functions.h"
+#include "../libbst/libbst.h"
 
 #define FUSE_USE_VERSION 34
 
@@ -22,6 +23,9 @@ static void sfs_releasedir(fuse_req_t request,fuse_ino_t ino,struct fuse_file_in
 static void sfs_getattr(fuse_req_t request,fuse_ino_t ino,struct fuse_file_info *file_info);
 static void sfs_lookup(fuse_req_t request,fuse_ino_t parent,const char *name);
 static void show_usage(char *name);
+static int referenced_inodes_bst_cmp(void *a,void *b);
+static int increase_inode_ref_count(uint64_t inode, int count);
+static void print_referenced_inode(void *);
 
 //====== prototypes for sfs_lowlevel_operations ======
 struct fuse_lowlevel_ops sfs_lowlevel_operations = {
@@ -32,7 +36,17 @@ struct fuse_lowlevel_ops sfs_lowlevel_operations = {
 	.lookup = sfs_lookup
 };
 
+//====== types ======
+struct referenced_inode {
+	uint64_t inode;
+	int reference_count;
+	void *data;
+	void (*destructor)(void *);
+};
+
+//====== globals ======
 sfs_t *sfs_filesystem;
+BST *referenced_inodes;
 
 int main(int argc, char **argv){
 	//====== initialise various variables ======
@@ -46,6 +60,11 @@ int main(int argc, char **argv){
 	//struct fuse_loop_config config;
 	sfs_t filesystem;
 	sfs_filesystem = &filesystem;
+	struct bst_user_functions bst_funcs = {
+		.free_data = free,
+		.datacmp = referenced_inodes_bst_cmp
+	};
+	referenced_inodes = bst_new(&bst_funcs);
 	
 	//====== process our custom arguments first ======
 	for (;;){
@@ -126,6 +145,7 @@ int main(int argc, char **argv){
 	fuse_remove_signal_handlers(session);
 	fuse_session_destroy(session);
 	fuse_opt_free_args(&f_args);
+	bst_delete(referenced_inodes);
 
 	return return_val;
 }
@@ -231,6 +251,8 @@ static void sfs_lookup(fuse_req_t request,fuse_ino_t parent,const char *name){
 			assert(sfs_stat(sub_inode_pointer,&entry.attr) == 0);
 			//send it off
 			fuse_reply_entry(request,&entry);
+			//increment reference count
+			increase_inode_ref_count(sub_inode_pointer,1);
 			//leave
 			return;
 		}
@@ -240,7 +262,35 @@ static void sfs_lookup(fuse_req_t request,fuse_ino_t parent,const char *name){
 }
 static void sfs_mkdir(fuse_req_t request,fuse_ino_t parent,const char name,mode_t mode){
 	//TODO check if filename exists in current directory
-	uint64_t new_inode = sfs_inode_create(sfs_filesystem,name,SFS_INODE_T_DIR,parent);
-	assert(new_inode != (uint64_t)-1);
+	//uint64_t new_inode = sfs_inode_create(sfs_filesystem,name,SFS_INODE_T_DIR,parent);
+	//assert(new_inode != (uint64_t)-1);
 	//TODO addd the reply with fuse_reply_entry and fuse_reply_err
+}
+static int referenced_inodes_bst_cmp(void *a,void *b){
+	int value;
+	struct referenced_inode *inode_a = a;
+	struct referenced_inode *inode_b = b;
+	value = inode_b->inode - inode_a->inode;
+	return value;
+}
+static int increase_inode_ref_count(uint64_t inode, int count){
+	//====== create node to hold ref count if needed ======
+	struct referenced_inode *referenced_inode_to_match = malloc(sizeof(struct referenced_inode));
+	memset(referenced_inode_to_match,0,sizeof(struct referenced_inode));
+	referenced_inode_to_match->inode = inode;
+	struct bst_node *ref_node = bst_find_node(referenced_inodes,referenced_inode_to_match);
+	if (ref_node == NULL){
+		//create a new node
+		ref_node = bst_new_node(referenced_inodes,referenced_inode_to_match);
+	}else{
+		free(referenced_inode_to_match);
+	}
+	//====== increment ref count ======
+	struct referenced_inode *ref_count_node = ref_node->data;
+	ref_count_node->reference_count += inode;
+	return 0;
+}
+static void print_referenced_inode(void *data){
+	struct referenced_inode *inode_reference = data;
+	printf("(%lu - %d)\n",inode_reference->inode,inode_reference->reference_count);
 }
