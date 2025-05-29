@@ -15,11 +15,17 @@ int main(int argc, char **argv){
 		.print_data = print_data
 	};
 	BST *bst = bst_new(&functions);
-	for (int i = 0; i < 20; i++){
+	for (int i = 0; i < 10; i++){
 		int *data = malloc(sizeof(int));
 		*data = random()%100;
+		printf("%d\n",*data);
 		bst_new_node(bst,data);
 	}
+	int *data = malloc(sizeof(int));
+	*data = 50;
+	bst_new_node(bst,data);
+	printf("\n");
+	bst_delete_node(bst,bst->root->left);
 	bst_print_nodes_inorder(bst);
 	bst_delete(bst);
 }

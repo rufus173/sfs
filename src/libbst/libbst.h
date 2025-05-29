@@ -27,5 +27,6 @@ int bst_delete(BST *bst);
 int bst_delete_all_nodes(BST *bst);
 int bst_new_node(BST *bst,void *data);
 void bst_print_nodes_inorder(BST *bst);
+int bst_delete_node(BST *bst,struct bst_node *node);
 
 #endif
