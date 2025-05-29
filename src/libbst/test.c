@@ -22,10 +22,10 @@ int main(int argc, char **argv){
 		bst_new_node(bst,data);
 	}
 	int *data = malloc(sizeof(int));
-	*data = 50;
+	*data = 22;
 	bst_new_node(bst,data);
 	printf("\n");
-	bst_delete_node(bst,bst->root->left);
+	bst_delete_node(bst,bst->root->left->left);
 	bst_print_nodes_inorder(bst);
 	bst_delete(bst);
 }
