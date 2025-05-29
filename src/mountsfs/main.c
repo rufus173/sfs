@@ -1,6 +1,7 @@
 #include "../../include/sfs_types.h"
 #include "../../include/sfs_functions.h"
 #include "../libbst/libbst.h"
+#include "../libtable/libtable.h"
 
 #define FUSE_USE_VERSION 34
 
@@ -15,6 +16,8 @@
 
 #define FUSE_ROOT_INODE 1
 
+#define MAX_OPEN_DIRS 1024
+
 //====== miscelanious prototypes ======
 static int sfs_stat(fuse_ino_t ino, struct stat *statbuf);
 static void sfs_opendir(fuse_req_t request,fuse_ino_t ino,struct fuse_file_info *file_info);
@@ -26,6 +29,8 @@ static void show_usage(char *name);
 static int referenced_inodes_bst_cmp(void *a,void *b);
 static int increase_inode_ref_count(uint64_t inode, int count);
 static void print_referenced_inode(void *);
+uint64_t generate_unique_runid();
+struct open_dir_tracker *initialise_open_dir_tracker();
 
 //====== prototypes for sfs_lowlevel_operations ======
 struct fuse_lowlevel_ops sfs_lowlevel_operations = {
@@ -43,10 +48,20 @@ struct referenced_inode {
 	void *data;
 	void (*destructor)(void *);
 };
+struct cached_dirent {
+	struct stat statbuf;
+	char name[SFS_MAX_FILENAME_SIZE];
+}
+struct cached_directory {
+	uint64_t inode;
+	uint64_t dirent_count;
+	struct cached_dirent *dirent_array;
+}
 
 //====== globals ======
 sfs_t *sfs_filesystem;
 BST *referenced_inodes;
+TABLE *cached_dirents;
 
 int main(int argc, char **argv){
 	//====== initialise various variables ======
@@ -65,6 +80,7 @@ int main(int argc, char **argv){
 		.datacmp = referenced_inodes_bst_cmp
 	};
 	referenced_inodes = bst_new(&bst_funcs);
+	cached_dirents = table_new(MAX_OPEN_DIRS);
 	
 	//====== process our custom arguments first ======
 	for (;;){
@@ -145,7 +161,9 @@ int main(int argc, char **argv){
 	fuse_remove_signal_handlers(session);
 	fuse_session_destroy(session);
 	fuse_opt_free_args(&f_args);
+
 	bst_delete(referenced_inodes);
+	table_delete(cached_dirents);
 
 	return return_val;
 }
@@ -179,7 +197,16 @@ static int sfs_stat(fuse_ino_t ino, struct stat *statbuf){
 }
 static void sfs_opendir(fuse_req_t request,fuse_ino_t ino,struct fuse_file_info *file_info){
 	printf("opendir requested on inode %lu\n",ino);
-	file_info->fh = ino;
+	//setup cache
+	int cache_index = table_allocate_index(cached_dirents);
+	if (cache_index == -1){
+		assert(fuse_reply_err(request,EMFILE) == 0);
+		return;
+	}
+	struct cached_directory *directory_cache = malloc(sizeof(struct cached_directory));
+	table_set_data(cached_dirents,cache_index,directory_cache);
+	//send it off
+	file_info->fh = cache_index;
 	assert(fuse_reply_open(request,file_info) == 0);
 }
 static void sfs_readdir(fuse_req_t request,fuse_ino_t ino,size_t size,off_t offset,struct fuse_file_info *file_info){
@@ -210,6 +237,11 @@ static void sfs_readdir(fuse_req_t request,fuse_ino_t ino,size_t size,off_t offs
 	}
 }
 static void sfs_releasedir(fuse_req_t request,fuse_ino_t ino,struct fuse_file_info *file_info){
+	//free all the cached data
+	struct cached_directory *directory_cache = table_get_data(cached_dirents);
+	free(directory_cache->dirent_array);
+	free(directory_cache);
+	table_free_index(cached_directory,file_info->fh);
 	//send success
 	assert(fuse_reply_err(request,0) == 0);
 }
@@ -293,4 +325,10 @@ static int increase_inode_ref_count(uint64_t inode, int count){
 static void print_referenced_inode(void *data){
 	struct referenced_inode *inode_reference = data;
 	printf("(%lu - %d)\n",inode_reference->inode,inode_reference->reference_count);
+}
+//good luck exausting 18446744073709551615 runids
+uint64_t generate_unique_runid(){
+	static uint64_t current_runid = 0;
+	current_runid++;
+	return current_runid;
 }

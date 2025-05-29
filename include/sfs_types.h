@@ -22,6 +22,7 @@ struct sfs_struct {
 typedef struct sfs_struct sfs_t;
 
 //====== struct to represent an inode ======
+#define SFS_MAX_FILENAME_SIZE 256
 struct __attribute__((__packed__)) sfs_inode {
 	uint64_t page;
 	uint64_t parent_inode_pointer;
@@ -30,7 +31,7 @@ struct __attribute__((__packed__)) sfs_inode {
 	uint64_t previous_page;
 	uint64_t generation_number;
 	uint8_t inode_type;
-	char name[256];
+	char name[SFS_MAX_FILENAME_SIZE];
 };
 typedef struct sfs_inode sfs_inode_t;
 #define SFS_INODE_T_DIR 0
