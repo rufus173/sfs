@@ -25,7 +25,7 @@ struct bst_user_functions {
 BST *bst_new(struct bst_user_functions *user_functions);
 int bst_delete(BST *bst);
 int bst_delete_all_nodes(BST *bst);
-int bst_new_node(BST *bst,void *data);
+struct bst_node *bst_new_node(BST *bst,void *data);
 void bst_print_nodes_inorder(BST *bst);
 int bst_delete_node(BST *bst,struct bst_node *node);
 struct bst_node *bst_find_node(BST *bst,void *data);

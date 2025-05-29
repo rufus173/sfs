@@ -59,6 +59,7 @@ int bst_delete(BST *bst){
 	free(bst->user_functions);
 	//delete the struct itself
 	free(bst);
+	return 0;
 }
 
 int bst_delete_all_nodes(BST *bst){
@@ -66,7 +67,7 @@ int bst_delete_all_nodes(BST *bst){
 	bst->root = NULL;
 	return 0;
 }
-int bst_new_node(BST *bst,void *data){
+struct bst_node *bst_new_node(BST *bst,void *data){
 	//allocate the node
 	struct bst_node *node = malloc(sizeof(struct bst_node));
 	memset(node,0,sizeof(struct bst_node));
@@ -100,6 +101,7 @@ int bst_new_node(BST *bst,void *data){
 			}
 		}
 	}
+	return node;
 }
 void bst_print_nodes_inorder(BST *bst){
 	_recursive_print_inorder(bst,bst->root);
@@ -146,6 +148,7 @@ int bst_delete_node(BST *bst,struct bst_node *node){
 		bst->user_functions->free_data(node->data);
 		free(node);
 	}
+	return 0;
 }
 struct bst_node *bst_find_node(BST *bst,void *data){
 	for (struct bst_node *current_node = bst->root;;){
