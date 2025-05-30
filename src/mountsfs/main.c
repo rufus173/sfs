@@ -25,9 +25,11 @@ static void sfs_readdir(fuse_req_t request,fuse_ino_t ino,size_t size,off_t offs
 static void sfs_releasedir(fuse_req_t request,fuse_ino_t ino,struct fuse_file_info *file_info);
 static void sfs_getattr(fuse_req_t request,fuse_ino_t ino,struct fuse_file_info *file_info);
 static void sfs_lookup(fuse_req_t request,fuse_ino_t parent,const char *name);
+static void sfs_forget(fuse_req_t request,fuse_ino_t ino, uint64_t lookup);
 static void show_usage(char *name);
 int referenced_inodes_bst_cmp(void *a,void *b);
 int increase_inode_ref_count(uint64_t inode, int count);
+int decrease_inode_ref_count(uint64_t inode, int count);
 void print_referenced_inode(void *);
 uint64_t generate_unique_runid();
 struct open_dir_tracker *initialise_open_dir_tracker();
@@ -38,7 +40,8 @@ struct fuse_lowlevel_ops sfs_lowlevel_operations = {
 	.readdir = sfs_readdir,
 	.releasedir = sfs_releasedir,
 	.getattr = sfs_getattr,
-	.lookup = sfs_lookup
+	.lookup = sfs_lookup,
+	.forget = sfs_forget
 };
 
 //====== types ======
@@ -329,16 +332,49 @@ int increase_inode_ref_count(uint64_t inode, int count){
 	}
 	//====== increment ref count ======
 	struct referenced_inode *ref_count_node = ref_node->data;
-	ref_count_node->reference_count += inode;
+	ref_count_node->reference_count += count;
+
+	printf("====== reference counts ======\n");
+	bst_print_nodes_inorder(referenced_inodes);
+	printf("====== end reference counts ======\n");
+	return 0;
+}
+int decrease_inode_ref_count(uint64_t inode, int count){
+	//====== locate the inode in the bst ======
+	struct referenced_inode referenced_inode_to_match;
+	memset(&referenced_inode_to_match,0,sizeof(struct referenced_inode));
+	referenced_inode_to_match.inode = inode;
+	struct bst_node *bst_node = bst_find_node(referenced_inodes,&referenced_inode_to_match);
+	struct referenced_inode *ref_node = bst_node->data;
+	if (ref_node == NULL) return -1; //inode does not have a reference count entry
+	//decrease the reference count
+	ref_node->reference_count -= count;
+	if (ref_node->reference_count < 1){
+		//====== inode reference count reached zero ======
+		//call the destructor if there is one
+		if (ref_node->destructor != NULL){
+			ref_node->destructor(ref_node->data);
+		}
+		//remove the ref node from the bst
+		bst_delete_node(referenced_inodes,bst_node);
+	}
+
 	return 0;
 }
 void print_referenced_inode(void *data){
 	struct referenced_inode *inode_reference = data;
-	printf("(%lu - %d)\n",inode_reference->inode,inode_reference->reference_count);
+	printf("(inode %lu - %d)\n",inode_reference->inode,inode_reference->reference_count);
 }
 //good luck exausting 18446744073709551615 runids
 uint64_t generate_unique_runid(){
 	static uint64_t current_runid = 0;
 	current_runid++;
 	return current_runid;
+}
+
+static void sfs_forget(fuse_req_t request,fuse_ino_t ino, uint64_t lookup){
+	printf("forget requested on inode %lu\n",ino);
+	decrease_inode_ref_count(ino,lookup);
+	//no reply required
+	//fuse_reply_none(request);
 }
