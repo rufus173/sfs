@@ -32,6 +32,7 @@ int increase_inode_ref_count(uint64_t inode, int count);
 int decrease_inode_ref_count(uint64_t inode, int count);
 void print_referenced_inode(void *);
 uint64_t generate_unique_runid();
+uint64_t inode_lookup_by_name(uint64_t parent,char *name);
 struct open_dir_tracker *initialise_open_dir_tracker();
 
 //====== prototypes for sfs_lowlevel_operations ======
@@ -41,7 +42,8 @@ struct fuse_lowlevel_ops sfs_lowlevel_operations = {
 	.releasedir = sfs_releasedir,
 	.getattr = sfs_getattr,
 	.lookup = sfs_lookup,
-	.forget = sfs_forget
+	.forget = sfs_forget,
+	.mkdir = sfs_mkdir
 };
 
 //====== types ======
@@ -306,6 +308,11 @@ static void sfs_lookup(fuse_req_t request,fuse_ino_t parent,const char *name){
 	fuse_reply_err(request,ENOENT);
 }
 static void sfs_mkdir(fuse_req_t request,fuse_ino_t parent,const char name,mode_t mode){
+	if (inode_lookup_by_name(parent,name,NULL) != (uint64_t)-1){
+		//file / folder exists already
+		fuse_reply_err(request,EEXIST);
+		return;
+	}
 	//TODO check if filename exists in current directory
 	//uint64_t new_inode = sfs_inode_create(sfs_filesystem,name,SFS_INODE_T_DIR,parent);
 	//assert(new_inode != (uint64_t)-1);
@@ -373,8 +380,32 @@ uint64_t generate_unique_runid(){
 }
 
 static void sfs_forget(fuse_req_t request,fuse_ino_t ino, uint64_t lookup){
-	printf("forget requested on inode %lu\n",ino);
+	printf("inode %lu forgotten\n",ino);
 	decrease_inode_ref_count(ino,lookup);
 	//no reply required
-	//fuse_reply_none(request);
+	//TODO something isnt working
+	fuse_reply_none(request);
+}
+uint64_t inode_lookup_by_name(uint64_t parent,char *name,sfs_inode_t *inode_header_return){
+	//====== get pointer count ======
+	sfs_inode_t parent_header;
+	sfs_read_inode_header(sfs_filesystem);
+	uint64_t pointer_count = parent_header.pointer_count;
+	//====== linear search for matching name ======
+	for (uint64_t i = 0; i < pointer_count,i++){
+		//get the inode
+		uint64_t inode = sfs_inode_get_pointer(sfs_filesystem,parent,i);
+		//read the inode header
+		sfs_inode_t child_inode_header;
+		sfs_read_inode_header(sfs_filesystem,inode,&child_inode_header);
+		//compare the name to the name we were given
+		if (strcmp(child_inode_header.name,name) == 0){
+			//copy the header info if requested
+			if (inode_header_return != NULL) memcpy(inode_header_return,child_inode_header,sizeof(sfs_inode_t));
+			//return the inode number
+			return inode;
+		}
+	}
+	//failure to find
+	return (uint64_t)-1;
 }
