@@ -10,7 +10,7 @@ int main(int argc, char **argv){
 		printf("usage: %s <file>\n",argv[0]);
 		return 1;
 	}
-	uint64_t pages_to_create = 1024/**1024*/;
+	uint64_t pages_to_create = 4096/**1024*/;
 	sfs_t filesystem;
 	int result = sfs_open_fs(&filesystem,argv[1],SFS_FUNC_FLAG_SKIP_SUPERBLOCK_CHECK | SFS_FUNC_FLAG_O_CREATE);
 	if (result < 0){
@@ -45,7 +45,11 @@ int main(int argc, char **argv){
 	uint64_t p1 = sfs_inode_create(&filesystem,name,SFS_INODE_T_DIR,1);
 	assert(p1 != (uint64_t)-1);
 	strcpy(name,"amazing_bacon");
-	assert(sfs_inode_create(&filesystem,name,SFS_INODE_T_DIR,p1) != (uint64_t)-1);
+	assert(sfs_inode_create(&filesystem,name,SFS_INODE_T_DIR,1) != (uint64_t)-1);
+	strcpy(name,"coolness");
+	assert(sfs_inode_create(&filesystem,name,SFS_INODE_T_DIR,1) != (uint64_t)-1);
+	strcpy(name,"fire");
+	assert(sfs_inode_create(&filesystem,name,SFS_INODE_T_DIR,1) != (uint64_t)-1);
 	/*
 	sfs_inode_t root_page;
 	assert(sfs_read_inode_header(&filesystem,1,&root_page) == 0);

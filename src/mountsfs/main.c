@@ -26,13 +26,14 @@ static void sfs_releasedir(fuse_req_t request,fuse_ino_t ino,struct fuse_file_in
 static void sfs_getattr(fuse_req_t request,fuse_ino_t ino,struct fuse_file_info *file_info);
 static void sfs_lookup(fuse_req_t request,fuse_ino_t parent,const char *name);
 static void sfs_forget(fuse_req_t request,fuse_ino_t ino, uint64_t lookup);
+static void sfs_mkdir(fuse_req_t request,fuse_ino_t parent,const char *name,mode_t mode);
 static void show_usage(char *name);
 int referenced_inodes_bst_cmp(void *a,void *b);
 int increase_inode_ref_count(uint64_t inode, int count);
 int decrease_inode_ref_count(uint64_t inode, int count);
 void print_referenced_inode(void *);
 uint64_t generate_unique_runid();
-uint64_t inode_lookup_by_name(uint64_t parent,char *name);
+uint64_t inode_lookup_by_name(uint64_t parent,const char *name,sfs_inode_t *inode_return);
 struct open_dir_tracker *initialise_open_dir_tracker();
 
 //====== prototypes for sfs_lowlevel_operations ======
@@ -307,16 +308,31 @@ static void sfs_lookup(fuse_req_t request,fuse_ino_t parent,const char *name){
 	//====== if it does not exist ======
 	fuse_reply_err(request,ENOENT);
 }
-static void sfs_mkdir(fuse_req_t request,fuse_ino_t parent,const char name,mode_t mode){
+static void sfs_mkdir(fuse_req_t request,fuse_ino_t parent,const char *name,mode_t mode){
+	//TODO: fix issues where creating one directory changes the name of others
+	printf("mkdir requested for [%s] with parent %lu\n",name,parent);
+	//====== verify it doesnt already exist ======
 	if (inode_lookup_by_name(parent,name,NULL) != (uint64_t)-1){
 		//file / folder exists already
 		fuse_reply_err(request,EEXIST);
 		return;
 	}
-	//TODO check if filename exists in current directory
-	//uint64_t new_inode = sfs_inode_create(sfs_filesystem,name,SFS_INODE_T_DIR,parent);
-	//assert(new_inode != (uint64_t)-1);
-	//TODO addd the reply with fuse_reply_entry and fuse_reply_err
+	//====== create the new inode ======
+	uint64_t new_inode = sfs_inode_create(sfs_filesystem,name,SFS_INODE_T_DIR,parent);
+	assert(new_inode != (uint64_t)-1);
+	printf("mkdir created new inode %lu\n",new_inode);
+	//====== return the entry for the new inode ======
+	sfs_inode_t inode_header;
+	assert(sfs_read_inode_header(sfs_filesystem,new_inode,&inode_header) == 0);
+	struct fuse_entry_param entry = {
+		.ino = new_inode,
+		.generation = inode_header.generation_number,
+		.attr_timeout = 1.0,
+		.entry_timeout = 1.0,
+	};
+	assert(sfs_stat(new_inode,&entry.attr) == 0);
+	increase_inode_ref_count(new_inode,1);
+	assert(fuse_reply_entry(request,&entry) == 0);
 }
 int referenced_inodes_bst_cmp(void *a,void *b){
 	int value;
@@ -386,13 +402,13 @@ static void sfs_forget(fuse_req_t request,fuse_ino_t ino, uint64_t lookup){
 	//TODO something isnt working
 	fuse_reply_none(request);
 }
-uint64_t inode_lookup_by_name(uint64_t parent,char *name,sfs_inode_t *inode_header_return){
+uint64_t inode_lookup_by_name(uint64_t parent,const char *name,sfs_inode_t *inode_header_return){
 	//====== get pointer count ======
 	sfs_inode_t parent_header;
-	sfs_read_inode_header(sfs_filesystem);
+	sfs_read_inode_header(sfs_filesystem,parent,&parent_header);
 	uint64_t pointer_count = parent_header.pointer_count;
 	//====== linear search for matching name ======
-	for (uint64_t i = 0; i < pointer_count,i++){
+	for (uint64_t i = 0; i < pointer_count; i++){
 		//get the inode
 		uint64_t inode = sfs_inode_get_pointer(sfs_filesystem,parent,i);
 		//read the inode header
@@ -401,7 +417,7 @@ uint64_t inode_lookup_by_name(uint64_t parent,char *name,sfs_inode_t *inode_head
 		//compare the name to the name we were given
 		if (strcmp(child_inode_header.name,name) == 0){
 			//copy the header info if requested
-			if (inode_header_return != NULL) memcpy(inode_header_return,child_inode_header,sizeof(sfs_inode_t));
+			if (inode_header_return != NULL) memcpy(inode_header_return,&child_inode_header,sizeof(sfs_inode_t));
 			//return the inode number
 			return inode;
 		}

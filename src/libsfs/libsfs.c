@@ -574,7 +574,7 @@ int sfs_inode_add_pointer(sfs_t *filesystem,uint64_t inode,uint64_t pointer){
 	}
 	return 0;
 }
-uint64_t sfs_inode_create(sfs_t *filesystem,char name[255],uint8_t type,uint64_t parent){
+uint64_t sfs_inode_create(sfs_t *filesystem,const char *name,uint8_t type,uint64_t parent){
 	//====== allocate a page ======
 	uint64_t allocated_page = sfs_allocate_page(filesystem);
 	if (allocated_page == (uint64_t)-1){
