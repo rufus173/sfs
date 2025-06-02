@@ -162,6 +162,21 @@ int main(int argc, char **argv){
 	//fuse_daemonize(options.foreground);
 	//single threaded (lets keep it simple)
 	int return_val = fuse_session_loop(session);
+	
+	/*
+	int return_val = 0;
+	//====== TESTING = TESTING = TESTING ======
+	printf("TESTING - TESTING - TESTING\n");
+	for (int i = 0; i < 90; i++){
+		printf("%lu\n",sfs_allocate_page(sfs_filesystem));
+	}
+	printf("%d\n",sfs_free_page(sfs_filesystem,4084));
+	for (int i = 0; i < 90; i++){
+		printf("%lu\n",sfs_allocate_page(sfs_filesystem));
+	}
+	*/
+
+	//=========================================
 
 	//====== cleanup ======
 	fuse_session_unmount(session);

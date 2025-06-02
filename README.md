@@ -30,7 +30,10 @@ This can be done through using `-f<fuse argument>`, e.g. passing `-omodules=subd
 # Design of the filesystem
 
 ## To-do:
+
 ```
+verify inode_get_pointer and inode_set_pointer work
+
 implement inodes being able to point to continuation pages
 implement inodes storing data
 	test sfs_inode_add_pointer
@@ -40,6 +43,7 @@ implement the readdir for the fuse fs
 implement the mkdir for the fuse fs
 implement the rmdir for the fuse fs
 ```
+
 The filesystem is split into 1024 byte pages:
 
 ## general information
