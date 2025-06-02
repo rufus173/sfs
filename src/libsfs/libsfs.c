@@ -83,6 +83,7 @@ int sfs_open_fs(sfs_t *filesystem,const char *path,int flags){
 		close(filesystem_fd);
 		return -1;
 	}
+	filesystem->current_generation_number = be64toh(current_generation_number);
 	return 0;
 }
 int sfs_close_fs(sfs_t *filesystem,int flags){
