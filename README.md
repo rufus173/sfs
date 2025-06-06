@@ -33,6 +33,7 @@ This can be done through using `-f<fuse argument>`, e.g. passing `-omodules=subd
 
 ```
 verify inode_get_pointer and inode_set_pointer work
+fix save/restore of next free page being one page behind
 
 implement inodes being able to point to continuation pages
 implement inodes storing data

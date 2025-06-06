@@ -27,13 +27,15 @@ static void sfs_getattr(fuse_req_t request,fuse_ino_t ino,struct fuse_file_info 
 static void sfs_lookup(fuse_req_t request,fuse_ino_t parent,const char *name);
 static void sfs_forget(fuse_req_t request,fuse_ino_t ino, uint64_t lookup);
 static void sfs_mkdir(fuse_req_t request,fuse_ino_t parent,const char *name,mode_t mode);
+static void sfs_rmdir(fuse_req_t request, fuse_ino_t parent, const char *name);
 static void show_usage(char *name);
 int referenced_inodes_bst_cmp(void *a,void *b);
 int increase_inode_ref_count(uint64_t inode, int count);
 int decrease_inode_ref_count(uint64_t inode, int count);
 void print_referenced_inode(void *);
 uint64_t generate_unique_runid();
-uint64_t inode_lookup_by_name(uint64_t parent,const char *name,sfs_inode_t *inode_return);
+uint64_t inode_lookup_by_name(uint64_t parent,const char *name,sfs_inode_t *inode_return,uint64_t *inode_index_return);
+void scheduled_rmdir(void *data);
 struct open_dir_tracker *initialise_open_dir_tracker();
 
 //====== prototypes for sfs_lowlevel_operations ======
@@ -44,10 +46,16 @@ struct fuse_lowlevel_ops sfs_lowlevel_operations = {
 	.getattr = sfs_getattr,
 	.lookup = sfs_lookup,
 	.forget = sfs_forget,
-	.mkdir = sfs_mkdir
+	.mkdir = sfs_mkdir,
+	.rmdir = sfs_rmdir
 };
 
 //====== types ======
+struct pointer_parent_inode_trio {
+	uint64_t pointer;
+	uint64_t parent;
+	uint64_t inode;
+};
 struct referenced_inode {
 	uint64_t inode;
 	int reference_count;
@@ -327,7 +335,7 @@ static void sfs_mkdir(fuse_req_t request,fuse_ino_t parent,const char *name,mode
 	//TODO: fix issues where creating one directory changes the name of others
 	printf("mkdir requested for [%s] with parent %lu\n",name,parent);
 	//====== verify it doesnt already exist ======
-	if (inode_lookup_by_name(parent,name,NULL) != (uint64_t)-1){
+	if (inode_lookup_by_name(parent,name,NULL,NULL) != (uint64_t)-1){
 		//file / folder exists already
 		fuse_reply_err(request,EEXIST);
 		return;
@@ -383,6 +391,10 @@ int decrease_inode_ref_count(uint64_t inode, int count){
 	memset(&referenced_inode_to_match,0,sizeof(struct referenced_inode));
 	referenced_inode_to_match.inode = inode;
 	struct bst_node *bst_node = bst_find_node(referenced_inodes,&referenced_inode_to_match);
+	if (bst_node == NULL){
+		//node does not have a stored reference count, so do nothing
+		return 1;
+	}
 	struct referenced_inode *ref_node = bst_node->data;
 	if (ref_node == NULL) return -1; //inode does not have a reference count entry
 	//decrease the reference count
@@ -414,10 +426,9 @@ static void sfs_forget(fuse_req_t request,fuse_ino_t ino, uint64_t lookup){
 	printf("inode %lu forgotten\n",ino);
 	decrease_inode_ref_count(ino,lookup);
 	//no reply required
-	//TODO something isnt working
 	fuse_reply_none(request);
 }
-uint64_t inode_lookup_by_name(uint64_t parent,const char *name,sfs_inode_t *inode_header_return){
+uint64_t inode_lookup_by_name(uint64_t parent,const char *name,sfs_inode_t *inode_header_return,uint64_t *pointer_index_return){
 	//====== get pointer count ======
 	sfs_inode_t parent_header;
 	sfs_read_inode_header(sfs_filesystem,parent,&parent_header);
@@ -433,10 +444,59 @@ uint64_t inode_lookup_by_name(uint64_t parent,const char *name,sfs_inode_t *inod
 		if (strcmp(child_inode_header.name,name) == 0){
 			//copy the header info if requested
 			if (inode_header_return != NULL) memcpy(inode_header_return,&child_inode_header,sizeof(sfs_inode_t));
+			//copy the index if requested
+			if (pointer_index_return != NULL) *pointer_index_return = i;
 			//return the inode number
 			return inode;
 		}
 	}
 	//failure to find
 	return (uint64_t)-1;
+}
+static void sfs_rmdir(fuse_req_t request, fuse_ino_t parent, const char *name){
+	//====== find the inode ======
+	uint64_t index;
+	uint64_t inode = inode_lookup_by_name(parent,name,NULL,&index);
+	if (inode == (uint64_t)-1){
+		fuse_reply_err(request,ENOENT);
+		return;
+	}
+	//====== schedule removal ======
+	//prepare data
+	struct pointer_parent_inode_trio *data = malloc(sizeof(struct pointer_parent_inode_trio));
+	data->pointer = index;
+	data->parent = parent;
+	data->inode = inode;
+	//find entry
+	struct referenced_inode match = {
+		.inode = inode
+	};
+	struct bst_node *node = bst_find_node(referenced_inodes,&match);
+	if (node == NULL){
+		//if unreferenced delete now
+		scheduled_rmdir(data);
+		goto success;
+	}
+	//schedule deletion
+	((struct referenced_inode *)(node->data))->destructor = scheduled_rmdir;
+	((struct referenced_inode *)(node->data))->data = data;
+	
+	//signal success
+	success:
+	fuse_reply_err(request,0);
+}
+void scheduled_rmdir(void *data){
+	//====== unpack data ======
+	struct pointer_parent_inode_trio *typed_data = data;
+	uint64_t pointer = typed_data->pointer;
+	uint64_t parent = typed_data->parent;
+	uint64_t inode = typed_data->inode;
+	printf("deleting inode %lu\n",inode);
+
+	//====== delete the reference in the parent ======
+	assert(sfs_inode_remove_pointer(sfs_filesystem,parent,pointer) == 0);
+	//====== free the page ======
+	assert(sfs_free_page(sfs_filesystem,inode) == 0);
+
+	free(data);
 }
