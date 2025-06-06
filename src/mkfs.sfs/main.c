@@ -44,11 +44,11 @@ int main(int argc, char **argv){
 	char name[256] = "epic-bacon";
 	uint64_t p1 = sfs_inode_create(&filesystem,name,SFS_INODE_T_DIR,1);
 	assert(p1 != (uint64_t)-1);
-	strcpy(name,"amazing_bacon");
+	strcpy(name,"a");
 	assert(sfs_inode_create(&filesystem,name,SFS_INODE_T_DIR,1) != (uint64_t)-1);
-	strcpy(name,"coolness");
+	strcpy(name,"b");
 	assert(sfs_inode_create(&filesystem,name,SFS_INODE_T_DIR,1) != (uint64_t)-1);
-	strcpy(name,"fire");
+	strcpy(name,"c");
 	assert(sfs_inode_create(&filesystem,name,SFS_INODE_T_DIR,1) != (uint64_t)-1);
 	/*
 	sfs_inode_t root_page;
