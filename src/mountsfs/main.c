@@ -227,6 +227,7 @@ static int sfs_stat(fuse_ino_t ino, struct stat *statbuf){
 }
 static void sfs_opendir(fuse_req_t request,fuse_ino_t ino,struct fuse_file_info *file_info){
 	printf("opendir requested on inode %lu\n",ino);
+	printf("====== inode %lu contains ======\n",ino);
 	//====== setup cache ======
 	int cache_index = table_allocate_index(cached_dirents);
 	if (cache_index == -1){
@@ -249,8 +250,10 @@ static void sfs_opendir(fuse_req_t request,fuse_ino_t ino,struct fuse_file_info 
 		sfs_inode_t inode;
 		assert(sfs_read_inode_header(sfs_filesystem,dirent,&inode) == 0);
 		memcpy(directory_cache->dirent_array[pointer_index].name,inode.name,SFS_MAX_FILENAME_SIZE);
+		printf("%lu [%s]\n",dirent,inode.name);
 	}
 
+	printf("====== end of inode ======\n");
 	//====== send it off ======
 	file_info->fh = cache_index;
 	assert(fuse_reply_open(request,file_info) == 0);
