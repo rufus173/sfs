@@ -31,6 +31,7 @@ static void sfs_rmdir(fuse_req_t request, fuse_ino_t parent, const char *name);
 static void show_usage(char *name);
 static void sfs_mknod(fuse_req_t request, fuse_ino_t parent, const char *name, mode_t mode, dev_t rdev);
 static void sfs_setattr(fuse_req_t request,fuse_ino_t ino,struct stat *attr,int to_set,struct fuse_file_info *fi);
+static void sfs_unlink(fuse_req_t request,fuse_ino_t parent,const char *name);
 int generate_and_reply_entry(fuse_req_t request,uint64_t inode);
 int referenced_inodes_bst_cmp(void *a,void *b);
 int increase_inode_ref_count(uint64_t inode, int count);
@@ -39,6 +40,7 @@ void print_referenced_inode(void *);
 uint64_t generate_unique_runid();
 uint64_t inode_lookup_by_name(uint64_t parent,const char *name,sfs_inode_t *inode_return,uint64_t *inode_index_return);
 void scheduled_rmdir(void *data);
+void scheduled_unlink(void *data);
 void atexit_cleanup();
 void bitmask_to_string(uint64_t bitmask,size_t bit_count,char buffer[65]);
 struct open_dir_tracker *initialise_open_dir_tracker();
@@ -53,8 +55,9 @@ struct fuse_lowlevel_ops sfs_lowlevel_operations = {
 	.forget = sfs_forget,
 	.mkdir = sfs_mkdir,
 	.rmdir = sfs_rmdir,
-	//.mknod = sfs_mknod,
-	//.setattr = sfs_setattr
+	.mknod = sfs_mknod,
+	.setattr = sfs_setattr,
+	.unlink = sfs_unlink
 };
 
 //====== types ======
@@ -554,6 +557,8 @@ static void sfs_setattr(fuse_req_t request,fuse_ino_t ino,struct stat *new_attr,
 		headers.uid = new_attr->st_uid;
 		headers.mode &= ~(S_ISUID | S_ISGID);
 	}
+	//TODO: implement for the other attributes
+
 	//====== write the modified headers ======
 	result = sfs_write_inode_header(sfs_filesystem,ino,&headers);
 	if (result != 0){
@@ -576,4 +581,59 @@ void bitmask_to_string(uint64_t bitmask,size_t bit_count,char buffer[65]){
 		buffer[i] = '0'+(bitmask & 1); //'0' + true = '1', '0' + false = '0'
 		bitmask >>= 1;
 	}
+}
+static void sfs_unlink(fuse_req_t request,fuse_ino_t parent,const char *name){
+	sfs_inode_t headers
+	uint64_t index
+	//====== grab the info ======
+	uint64_t inode = inode_lookup_by_name(parent,name,headers,&index);
+	if (inode == (uint64_t)-1){
+		//it needs to exist to be deleted
+		fuse_reply_err(request,ENOENT);
+		return;
+	}
+
+	//====== schedule removal ======
+	//prepare data
+	struct pointer_parent_inode_trio *data = malloc(sizeof(struct pointer_parent_inode_trio));
+	data->pointer = index;
+	data->parent = parent;
+	data->inode = inode;
+	//find entry
+	struct referenced_inode match = {
+		.inode = inode
+	};
+	struct bst_node *node = bst_find_node(referenced_inodes,&match);
+	if (node == NULL){
+		//if unreferenced delete now
+		scheduled_unlink(data);
+		goto success;
+	}
+	//schedule deletion
+	((struct referenced_inode *)(node->data))->destructor = scheduled_unlink;
+	((struct referenced_inode *)(node->data))->data = data;
+	
+	success:
+	//success!
+	fuse_reply_err(request,0);
+}
+void scheduled_unlink(void *data){
+	//====== unpack data ======
+	struct pointer_parent_inode_trio *typed_data = data;
+	uint64_t pointer = typed_data->pointer;
+	uint64_t parent = typed_data->parent;
+	uint64_t inode = typed_data->inode;
+	printf("deleting inode %lu\n",inode);
+	//TODO: free all pages
+
+	//====== delete the reference in the parent ======
+	int result = sfs_inode_remove_pointer(sfs_filesystem,parent,pointer);
+	if (result != 0){
+		goto end;
+	}
+	//====== free the page ======
+	sfs_free_page(sfs_filesystem,inode);
+
+	end:
+	free(data);
 }

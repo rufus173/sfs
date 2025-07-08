@@ -36,6 +36,8 @@ implement inodes storing data
 	create sfs_inode_create
 	create sfs_inode_destroy
 implement setattr and unlink
+implement self balancing on the binary search tree module
+implement inodes not showing up if they are scheduled for deletion
 ```
 
 The filesystem is split into 1024 byte pages:
