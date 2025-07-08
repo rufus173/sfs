@@ -36,6 +36,7 @@ void print_referenced_inode(void *);
 uint64_t generate_unique_runid();
 uint64_t inode_lookup_by_name(uint64_t parent,const char *name,sfs_inode_t *inode_return,uint64_t *inode_index_return);
 void scheduled_rmdir(void *data);
+void atexit_cleanup();
 struct open_dir_tracker *initialise_open_dir_tracker();
 
 //====== prototypes for sfs_lowlevel_operations ======
@@ -73,11 +74,13 @@ struct cached_directory {
 };
 
 //====== globals ======
-sfs_t *sfs_filesystem;
+sfs_t *sfs_filesystem = NULL;
 BST *referenced_inodes;
 TABLE *cached_dirents;
 
 int main(int argc, char **argv){
+	//====== register atexit functions ======
+	atexit(atexit_cleanup);
 	//====== initialise various variables ======
 	struct fuse_args f_args = FUSE_ARGS_INIT(1,argv);
 	struct fuse_session *session;
@@ -87,8 +90,11 @@ int main(int argc, char **argv){
 		{"help",	no_argument,		0,'h'}
 	};
 	//struct fuse_loop_config config;
+
+	//possible race condition if exit called between here and sfs_open_fs
 	sfs_t filesystem;
 	sfs_filesystem = &filesystem;
+
 	struct bst_user_functions bst_funcs = {
 		.free_data = free,
 		.datacmp = referenced_inodes_bst_cmp,
@@ -186,16 +192,27 @@ int main(int argc, char **argv){
 
 	//=========================================
 
+	printf("====== unmounting filesystem ======\n");
 	//====== cleanup ======
+	printf("closing down fuse\n");
 	fuse_session_unmount(session);
 	fuse_remove_signal_handlers(session);
 	fuse_session_destroy(session);
 	fuse_opt_free_args(&f_args);
 
+	//actual filesystem closed during atexit() function
+
+	printf("cleaning up data structures\n");
 	bst_delete(referenced_inodes);
 	table_delete(cached_dirents);
 
 	return return_val;
+}
+void atexit_cleanup(){
+	if (sfs_filesystem != NULL){
+		printf("closing underlying filesystem\n");
+		sfs_close_fs(sfs_filesystem,0);
+	}
 }
 static int sfs_stat(fuse_ino_t ino, struct stat *statbuf){
 	sfs_inode_t inode;
