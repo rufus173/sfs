@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <assert.h>
+#include <unistd.h>
 #include <string.h>
 
 int main(int argc, char **argv){
@@ -24,7 +25,9 @@ int main(int argc, char **argv){
 
 	//====== create the root inode ======
 	sfs_inode_t root_inode = {
-		.inode_type = SFS_INODE_T_DIR,
+		.mode = S_IFDIR | 0755,
+		.uid = getuid(),
+		.gid = getgid(),
 		.page = 1,
 		.parent_inode_pointer = 1,
 		.pointer_count = 0,
@@ -42,14 +45,14 @@ int main(int argc, char **argv){
 
 	/* testing --- testing --- testing --- testing --- */
 	char name[256] = "epic-bacon";
-	uint64_t p1 = sfs_inode_create(&filesystem,name,SFS_INODE_T_DIR,1);
+	uint64_t p1 = sfs_inode_create(&filesystem,name,S_IFDIR | 0755,getuid(),getgid(),1);
 	assert(p1 != (uint64_t)-1);
 	strcpy(name,"a");
-	assert(sfs_inode_create(&filesystem,name,SFS_INODE_T_DIR,1) != (uint64_t)-1);
+	assert(sfs_inode_create(&filesystem,name,S_IFDIR | 0755,getuid(),getgid(),1) != (uint64_t)-1);
 	strcpy(name,"b");
-	assert(sfs_inode_create(&filesystem,name,SFS_INODE_T_DIR,1) != (uint64_t)-1);
+	assert(sfs_inode_create(&filesystem,name,S_IFDIR | 0755,getuid(),getgid(),1) != (uint64_t)-1);
 	strcpy(name,"c");
-	assert(sfs_inode_create(&filesystem,name,SFS_INODE_T_DIR,1) != (uint64_t)-1);
+	assert(sfs_inode_create(&filesystem,name,S_IFDIR | 0755,getuid(),getgid(),1) != (uint64_t)-1);
 	/*
 	sfs_inode_t root_page;
 	assert(sfs_read_inode_header(&filesystem,1,&root_page) == 0);

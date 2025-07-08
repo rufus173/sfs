@@ -575,7 +575,7 @@ int sfs_inode_add_pointer(sfs_t *filesystem,uint64_t inode,uint64_t pointer){
 	}
 	return 0;
 }
-uint64_t sfs_inode_create(sfs_t *filesystem,const char *name,uint8_t type,uint64_t parent){
+uint64_t sfs_inode_create(sfs_t *filesystem,const char *name,mode_t mode,uid_t uid,gid_t gid,uint64_t parent){
 	//====== allocate a page ======
 	uint64_t allocated_page = sfs_allocate_page(filesystem);
 	if (allocated_page == (uint64_t)-1){
@@ -583,7 +583,9 @@ uint64_t sfs_inode_create(sfs_t *filesystem,const char *name,uint8_t type,uint64
 	}
 	//====== create the inode ======
 	sfs_inode_t new_inode = {
-		.inode_type = type,
+		.mode = mode,
+		.gid = gid,
+		.uid = uid,
 		.page = allocated_page,
 		.parent_inode_pointer = parent,
 		.pointer_count = 0,

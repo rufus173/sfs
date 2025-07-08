@@ -220,23 +220,12 @@ static int sfs_stat(fuse_ino_t ino, struct stat *statbuf){
 	assert(sfs_read_inode_header(sfs_filesystem,ino,&inode) == 0);
 	statbuf->st_ino = ino;
 	//====== the permissions + filetype ======
-	int mode = 0;
-	switch(inode.inode_type){
-	case SFS_INODE_T_DIR:
-		mode = S_IFDIR;	break;
-	case SFS_INODE_T_FILE:
-		mode = S_IFREG;	break;
-	}
-	//permitions (not implemented)
-	mode |= S_IRWXU;
-	mode |= S_IRWXG;
-	mode |= S_IRWXO;
-	statbuf->st_mode = mode;
+	statbuf->st_mode = inode.mode;
 	//hard links not implemented
 	statbuf->st_nlink = 1;
 	//owners not implemented
-	statbuf->st_uid = getuid();
-	statbuf->st_gid = getgid();
+	statbuf->st_uid = inode.uid;
+	statbuf->st_gid = inode.gid;
 	//other various fields
 	statbuf->st_blksize = SFS_PAGE_SIZE;
 	statbuf->st_blocks = inode.pointer_count;
@@ -319,7 +308,7 @@ static void sfs_lookup(fuse_req_t request,fuse_ino_t parent,const char *name){
 	//====== check parent is a directory ======
 	sfs_inode_t inode;
 	assert(sfs_read_inode_header(sfs_filesystem,parent,&inode) == 0);
-	if (inode.inode_type != SFS_INODE_T_DIR){
+	if (!S_ISDIR(inode.mode)){
 		fuse_reply_err(request,ENOTDIR);
 		return;
 	}
@@ -361,7 +350,7 @@ static void sfs_mkdir(fuse_req_t request,fuse_ino_t parent,const char *name,mode
 		return;
 	}
 	//====== create the new inode ======
-	uint64_t new_inode = sfs_inode_create(sfs_filesystem,name,SFS_INODE_T_DIR,parent);
+	uint64_t new_inode = sfs_inode_create(sfs_filesystem,name,mode | S_IFDIR,getuid(),getgid(),parent);
 	assert(new_inode != (uint64_t)-1);
 	printf("mkdir created new inode %lu\n",new_inode);
 	//====== return the entry for the new inode ======

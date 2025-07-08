@@ -30,12 +30,12 @@ struct __attribute__((__packed__)) sfs_inode {
 	uint64_t next_page;
 	uint64_t previous_page;
 	uint64_t generation_number;
-	uint8_t inode_type;
+	uint32_t mode;
+	uint32_t uid;
+	uint32_t gid;
 	char name[SFS_MAX_FILENAME_SIZE];
 };
 typedef struct sfs_inode sfs_inode_t;
-#define SFS_INODE_T_DIR 0
-#define SFS_INODE_T_FILE 1
 #define SFS_INODE_ALIGNED_HEADER_SIZE (SFS_CALCULATE_ALIGNMENT_PADDING(sfs_inode_t,uint64_t)+sizeof(sfs_inode_t))
 #define SFS_INODE_MAX_POINTERS ((SFS_PAGE_SIZE-SFS_INODE_ALIGNED_HEADER_SIZE)/sizeof(uint64_t))
 

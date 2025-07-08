@@ -32,9 +32,6 @@ This can be done through using `-f<fuse argument>`, e.g. passing `-omodules=subd
 ## To-do:
 
 ```
-verify inode_get_pointer and inode_set_pointer work
-fix save/restore of next free page being one page behind
-
 implement inodes being able to point to continuation pages
 implement inodes storing data
 	test sfs_inode_add_pointer
@@ -76,7 +73,9 @@ The header region contains:
 8 bytes `uint64_t next_page`
 8 bytes `uint64_t previous_page`
 8 bytes of `uint64_t generation_number` (unique for every inode ever created, even if it shares an inode number with a deleted inode)
-1 bytes of `uint8_t inode_type`
+4 bytes of `uint32_t mode` (posix style)
+4 bytes of `uint32_t uid` (owner
+4 bytes of `uint32_t gid` owner)
 256 bytes of a null terminated name
 
 The data region of the inode contains all the pointers to relevant pages. The size of this region depends on the page size

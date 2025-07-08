@@ -2,6 +2,7 @@
 #define _SFS_FUNCTIONS_H
 
 #include "sfs_types.h"
+#include <sys/stat.h>
 
 //====== open and close ======
 int sfs_open_fs(sfs_t *filesystem,const char *path,int flags);
@@ -40,7 +41,7 @@ int sfs_inode_remove_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index);
 //similar to set pointer but resizes inode and appends pointer to the end
 int sfs_inode_add_pointer(sfs_t *filesystem,uint64_t inode,uint64_t pointer);
 //creates an inode under a parent inode and returns the inode number of the created node
-uint64_t sfs_inode_create(sfs_t *filesystem,const char *name,uint8_t type,uint64_t parent);
+uint64_t sfs_inode_create(sfs_t *filesystem,const char *name,mode_t mode,uid_t uid,gid_t gid,uint64_t parent);
 
 //====== superblock ======
 //closing the filesystem calls this, but it wont hurt to call this occasionaly
