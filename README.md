@@ -32,14 +32,10 @@ This can be done through using `-f<fuse argument>`, e.g. passing `-omodules=subd
 ## To-do:
 
 ```
-implement inodes being able to point to continuation pages
 implement inodes storing data
-	test sfs_inode_add_pointer
 	create sfs_inode_create
 	create sfs_inode_destroy
-implement the readdir for the fuse fs
-implement the mkdir for the fuse fs
-implement the rmdir for the fuse fs
+implement setattr and unlink
 ```
 
 The filesystem is split into 1024 byte pages:
@@ -48,6 +44,10 @@ The filesystem is split into 1024 byte pages:
 
 All information stored in the page headers is stored in big endian (network byte order).
 All functions that take in structs to write to a block header or other such thing will deal with correcting endianness for you, likewise reading a struct from a page header will automatically convert to your machines endianness.
+
+### Errors
+
+If an `sfs_` function fails it will set errno, and return either `-1`, or `(uint64_t)-1`
 
 ## Superblock
 
@@ -73,6 +73,7 @@ The header region contains:
 8 bytes `uint64_t next_page`
 8 bytes `uint64_t previous_page`
 8 bytes of `uint64_t generation_number` (unique for every inode ever created, even if it shares an inode number with a deleted inode)
+8 bytes of `uint64_t size` (size in bytes of a regular file. Undefined if directory)
 4 bytes of `uint32_t mode` (posix style)
 4 bytes of `uint32_t uid` (owner
 4 bytes of `uint32_t gid` owner)

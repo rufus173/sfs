@@ -29,6 +29,9 @@ static void sfs_forget(fuse_req_t request,fuse_ino_t ino, uint64_t lookup);
 static void sfs_mkdir(fuse_req_t request,fuse_ino_t parent,const char *name,mode_t mode);
 static void sfs_rmdir(fuse_req_t request, fuse_ino_t parent, const char *name);
 static void show_usage(char *name);
+static void sfs_mknod(fuse_req_t request, fuse_ino_t parent, const char *name, mode_t mode, dev_t rdev);
+static void sfs_setattr(fuse_req_t request,fuse_ino_t ino,struct stat *attr,int to_set,struct fuse_file_info *fi);
+int generate_and_reply_entry(fuse_req_t request,uint64_t inode);
 int referenced_inodes_bst_cmp(void *a,void *b);
 int increase_inode_ref_count(uint64_t inode, int count);
 int decrease_inode_ref_count(uint64_t inode, int count);
@@ -37,6 +40,7 @@ uint64_t generate_unique_runid();
 uint64_t inode_lookup_by_name(uint64_t parent,const char *name,sfs_inode_t *inode_return,uint64_t *inode_index_return);
 void scheduled_rmdir(void *data);
 void atexit_cleanup();
+void bitmask_to_string(uint64_t bitmask,size_t bit_count,char buffer[65]);
 struct open_dir_tracker *initialise_open_dir_tracker();
 
 //====== prototypes for sfs_lowlevel_operations ======
@@ -48,7 +52,9 @@ struct fuse_lowlevel_ops sfs_lowlevel_operations = {
 	.lookup = sfs_lookup,
 	.forget = sfs_forget,
 	.mkdir = sfs_mkdir,
-	.rmdir = sfs_rmdir
+	.rmdir = sfs_rmdir,
+	//.mknod = sfs_mknod,
+	//.setattr = sfs_setattr
 };
 
 //====== types ======
@@ -321,19 +327,10 @@ static void sfs_lookup(fuse_req_t request,fuse_ino_t parent,const char *name){
 		if (strcmp(sub_inode.name,name) == 0){
 			//====== directory found ======
 			//generate the dir entry
-			struct fuse_entry_param entry = {
-				.ino = sub_inode_pointer,
-				.generation = sub_inode.generation_number,
-				.attr_timeout = 1.0,
-				.entry_timeout = 1.0,
-			};
-			//fill in the stat struct
-			assert(sfs_stat(sub_inode_pointer,&entry.attr) == 0);
-			//send it off
-			fuse_reply_entry(request,&entry);
-			//increment reference count
-			increase_inode_ref_count(sub_inode_pointer,1);
-			//leave
+			int result = generate_and_reply_entry(request,sub_inode_pointer);
+			if (result != 0){
+				fuse_reply_err(request,result);
+			}
 			return;
 		}
 	}
@@ -354,17 +351,7 @@ static void sfs_mkdir(fuse_req_t request,fuse_ino_t parent,const char *name,mode
 	assert(new_inode != (uint64_t)-1);
 	printf("mkdir created new inode %lu\n",new_inode);
 	//====== return the entry for the new inode ======
-	sfs_inode_t inode_header;
-	assert(sfs_read_inode_header(sfs_filesystem,new_inode,&inode_header) == 0);
-	struct fuse_entry_param entry = {
-		.ino = new_inode,
-		.generation = inode_header.generation_number,
-		.attr_timeout = 1.0,
-		.entry_timeout = 1.0,
-	};
-	assert(sfs_stat(new_inode,&entry.attr) == 0);
-	increase_inode_ref_count(new_inode,1);
-	assert(fuse_reply_entry(request,&entry) == 0);
+	assert(generate_and_reply_entry(request,new_inode) == 0);
 }
 int referenced_inodes_bst_cmp(void *a,void *b){
 	int value;
@@ -508,4 +495,85 @@ void scheduled_rmdir(void *data){
 	assert(sfs_free_page(sfs_filesystem,inode) == 0);
 
 	free(data);
+}
+static void sfs_mknod(fuse_req_t request, fuse_ino_t parent, const char *name, mode_t mode, dev_t rdev){
+	printf("mknod requested for [%s] under parent %lu\n",name,parent);
+	//====== assert we only support regular files ======
+	if (!S_ISREG(mode)){
+		fuse_reply_err(request,ENOTSUP);
+		return;
+	}
+	uint64_t new_inode = sfs_inode_create(sfs_filesystem,name,mode,getuid(),getgid(),parent);
+	if (new_inode != (uint64_t)-1){
+		fuse_reply_err(request,errno);
+		return;
+	}
+	//====== return the entry for the new inode ======
+	int result = generate_and_reply_entry(request,new_inode);
+	if (result != 0){
+		fuse_reply_err(request,result);
+	}
+}
+int generate_and_reply_entry(fuse_req_t request,uint64_t inode){
+	sfs_inode_t inode_header;
+	int result = sfs_read_inode_header(sfs_filesystem,inode,&inode_header);
+	if (result != 0){
+		return result;
+	}
+	struct fuse_entry_param entry = {
+		.ino = inode,
+		.generation = inode_header.generation_number,
+		.attr_timeout = 1.0,
+		.entry_timeout = 1.0,
+	};
+	result = sfs_stat(inode,&entry.attr);
+	if (result < 0){
+		return result;
+	}
+	increase_inode_ref_count(inode,1);
+	return fuse_reply_entry(request,&entry);
+}
+static void sfs_setattr(fuse_req_t request,fuse_ino_t ino,struct stat *new_attr,int to_set,struct fuse_file_info *fi){
+	char buffer[65];
+	bitmask_to_string(to_set,17,buffer);
+	printf("setattr called on inode %lu with to_set mask of %s\n",ino,buffer);
+	//====== read current header ======
+	sfs_inode_t headers;
+	int result = sfs_read_inode_header(sfs_filesystem,ino,&headers);
+	if (result != 0){
+		fuse_reply_err(request,errno);
+		return;
+	}
+	if (to_set & FUSE_SET_ATTR_MODE) headers.mode = new_attr->st_mode;
+	//reset setuid and setgid bits when changing owner
+	if (to_set & FUSE_SET_ATTR_GID){
+		headers.gid = new_attr->st_gid;
+		headers.mode &= ~(S_ISUID | S_ISGID);
+	}
+	if (to_set & FUSE_SET_ATTR_UID){
+		headers.uid = new_attr->st_uid;
+		headers.mode &= ~(S_ISUID | S_ISGID);
+	}
+	//====== write the modified headers ======
+	result = sfs_write_inode_header(sfs_filesystem,ino,&headers);
+	if (result != 0){
+		fuse_reply_err(request,errno);
+		return;
+	}
+	//====== reply with the new entry data ======
+	struct stat attr;
+	result = sfs_stat(ino,&attr);
+	if (result != 0){
+		fuse_reply_err(request,errno);
+		return;
+	}
+	fuse_reply_attr(request,&attr,1.0);
+}
+void bitmask_to_string(uint64_t bitmask,size_t bit_count,char buffer[65]){
+	memset(buffer,0,65);
+	if (bit_count > 64) bit_count = 64; //lets not overflow today
+	for (size_t i = 0; i < bit_count; i++){
+		buffer[i] = '0'+(bitmask & 1); //'0' + true = '1', '0' + false = '0'
+		bitmask >>= 1;
+	}
 }

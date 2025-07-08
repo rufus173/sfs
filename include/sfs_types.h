@@ -30,6 +30,7 @@ struct __attribute__((__packed__)) sfs_inode {
 	uint64_t next_page;
 	uint64_t previous_page;
 	uint64_t generation_number;
+	uint64_t size;
 	uint32_t mode;
 	uint32_t uid;
 	uint32_t gid;

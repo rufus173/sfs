@@ -218,6 +218,10 @@ int sfs_write_inode_header(sfs_t *filesystem,uint64_t page,sfs_inode_t *inode){
 	inode_cpy.next_page = htobe64(inode_cpy.next_page);
 	inode_cpy.previous_page = htobe64(inode_cpy.previous_page);
 	inode_cpy.generation_number = htobe64(inode_cpy.generation_number);
+	inode_cpy.mode = htobe32(inode_cpy.mode);
+	inode_cpy.uid = htobe32(inode_cpy.uid);
+	inode_cpy.gid = htobe32(inode_cpy.gid);
+	inode_cpy.size = htobe64(inode_cpy.size);
 	//====== write the struct ======
 	result = write(fd,&inode_cpy,sizeof(sfs_inode_t));
 	if (result < sizeof(sfs_inode_t)){
@@ -246,6 +250,10 @@ int sfs_read_inode_header(sfs_t *filesystem,uint64_t page,sfs_inode_t *inode){
 	inode->next_page = be64toh(inode->next_page);
 	inode->previous_page = be64toh(inode->previous_page);
 	inode->generation_number = be64toh(inode->generation_number);
+	inode->mode = be32toh(inode->mode);
+	inode->uid = be32toh(inode->uid);
+	inode->gid = be32toh(inode->gid);
+	inode->size = be64toh(inode->size);
 	return 0;
 }
 void sfs_print_info(){
