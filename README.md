@@ -32,12 +32,14 @@ This can be done through using `-f<fuse argument>`, e.g. passing `-omodules=subd
 ## To-do:
 
 ```
+implement sfs_file_resize
 implement inodes storing data
 	create sfs_inode_create
 	create sfs_inode_destroy
 implement setattr and unlink
 implement self balancing on the binary search tree module
 implement inodes not showing up if they are scheduled for deletion
+call sfs_update_superblock after mkdir, rmdir, unlink and mknod
 ```
 
 The filesystem is split into 1024 byte pages:
@@ -138,6 +140,24 @@ Closing the dir simply frees the allocated space.
 ## Open Inode tracker
 
 This tracks all the open inodes. Stored in a binary search tree (sorted by inode)
+
+# File manipulation functions
+
+## resize with `int sfs_file_resize(sfs_t *filesystem,uint64_t inode,uint64_t new_size)`
+
+Essentially truncate, takes all the necessary steps to change the file size, including adding and removing pointers and continuation pages, freeing and allocating pages for data and updating the headers.
+Returns 0 on success and -1 on error
+
+## read with `size_t sfs_file_read(uint64_t inode,off_t offset,char buffer[.len],size_t len)`
+
+Read `len` bytes from the `offset` in the provided `inode`.
+Returns byte count read on success and -1 on error
+
+## write with `size_t sfs_file_write(uint64_t inode,off_t offset,char buffer[.len],size_t len)`
+
+Write `len` bytes from the `offset` in the provided `inode`. Will automatically resize the file to fit the data
+Returns byte count written on success and -1 on error
+
 
 # Binary search tree library
 

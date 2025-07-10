@@ -43,6 +43,12 @@ int sfs_inode_add_pointer(sfs_t *filesystem,uint64_t inode,uint64_t pointer);
 //creates an inode under a parent inode and returns the inode number of the created node
 uint64_t sfs_inode_create(sfs_t *filesystem,const char *name,mode_t mode,uid_t uid,gid_t gid,uint64_t parent);
 
+//====== regular files ======
+//does both truncate and extending to change file size to new size
+int sfs_file_resize(sfs_t *filesystem,uint64_t inode,uint64_t new_size);
+size_t sfs_file_read(uint64_t inode,off_t offset,char buffer[],size_t len);
+size_t sfs_file_write(uint64_t inode,off_t offset,char buffer[],size_t len);
+
 //====== superblock ======
 //closing the filesystem calls this, but it wont hurt to call this occasionaly
 int sfs_update_superblock(sfs_t *filesystem);

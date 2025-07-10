@@ -341,7 +341,6 @@ static void sfs_lookup(fuse_req_t request,fuse_ino_t parent,const char *name){
 	fuse_reply_err(request,ENOENT);
 }
 static void sfs_mkdir(fuse_req_t request,fuse_ino_t parent,const char *name,mode_t mode){
-	//TODO: fix issues where creating one directory changes the name of others
 	printf("mkdir requested for [%s] with parent %lu\n",name,parent);
 	//====== verify it doesnt already exist ======
 	if (inode_lookup_by_name(parent,name,NULL,NULL) != (uint64_t)-1){
@@ -351,10 +350,21 @@ static void sfs_mkdir(fuse_req_t request,fuse_ino_t parent,const char *name,mode
 	}
 	//====== create the new inode ======
 	uint64_t new_inode = sfs_inode_create(sfs_filesystem,name,mode | S_IFDIR,getuid(),getgid(),parent);
-	assert(new_inode != (uint64_t)-1);
+	if (new_inode != (uint64_t)-1){
+		fuse_reply_err(request,errno);
+		return;
+	}
 	printf("mkdir created new inode %lu\n",new_inode);
+	
+	//update superblock
+	sfs_update_superblock(sfs_filesystem);
+
 	//====== return the entry for the new inode ======
-	assert(generate_and_reply_entry(request,new_inode) == 0);
+	int result = generate_and_reply_entry(request,new_inode);
+	if (result != 0){
+		fuse_reply_err(request,errno);
+		return;
+	}
 }
 int referenced_inodes_bst_cmp(void *a,void *b){
 	int value;
@@ -490,12 +500,15 @@ void scheduled_rmdir(void *data){
 	uint64_t pointer = typed_data->pointer;
 	uint64_t parent = typed_data->parent;
 	uint64_t inode = typed_data->inode;
-	printf("deleting inode %lu\n",inode);
+	printf("deleting inode %lu (directory)\n",inode);
 
 	//====== delete the reference in the parent ======
 	assert(sfs_inode_remove_pointer(sfs_filesystem,parent,pointer) == 0);
 	//====== free the page ======
 	assert(sfs_free_page(sfs_filesystem,inode) == 0);
+
+	//update superblock
+	sfs_update_superblock(sfs_filesystem);
 
 	free(data);
 }
@@ -511,6 +524,10 @@ static void sfs_mknod(fuse_req_t request, fuse_ino_t parent, const char *name, m
 		fuse_reply_err(request,errno);
 		return;
 	}
+
+	//update superblock
+	sfs_update_superblock(sfs_filesystem);
+	
 	//====== return the entry for the new inode ======
 	int result = generate_and_reply_entry(request,new_inode);
 	if (result != 0){
@@ -547,16 +564,13 @@ static void sfs_setattr(fuse_req_t request,fuse_ino_t ino,struct stat *new_attr,
 		fuse_reply_err(request,errno);
 		return;
 	}
+
 	if (to_set & FUSE_SET_ATTR_MODE) headers.mode = new_attr->st_mode;
+	if (to_set & FUSE_SET_ATTR_GID) headers.gid = new_attr->st_gid;
+	if (to_set & FUSE_SET_ATTR_UID) headers.uid = new_attr->st_uid;
 	//reset setuid and setgid bits when changing owner
-	if (to_set & FUSE_SET_ATTR_GID){
-		headers.gid = new_attr->st_gid;
-		headers.mode &= ~(S_ISUID | S_ISGID);
-	}
-	if (to_set & FUSE_SET_ATTR_UID){
-		headers.uid = new_attr->st_uid;
-		headers.mode &= ~(S_ISUID | S_ISGID);
-	}
+	if (to_set & (FUSE_SET_ATTR_UID | FUSE_SET_ATTR_GID)) headers.mode &= ~(S_ISUID | S_ISGID);
+
 	//TODO: implement for the other attributes
 
 	//====== write the modified headers ======
@@ -564,6 +578,16 @@ static void sfs_setattr(fuse_req_t request,fuse_ino_t ino,struct stat *new_attr,
 	if (result != 0){
 		fuse_reply_err(request,errno);
 		return;
+	}
+	//====== resize if required ======
+	//needs to be done after the write inode headers as it also modifies the headers
+	if (to_set & FUSE_SET_ATTR_SIZE){
+		int result = sfs_file_resize(sfs_filesystem,ino,new_attr->st_size);
+		if (result < 0){
+			fuse_reply_err(request,errno);
+			return;
+		}
+		
 	}
 	//====== reply with the new entry data ======
 	struct stat attr;
@@ -583,10 +607,10 @@ void bitmask_to_string(uint64_t bitmask,size_t bit_count,char buffer[65]){
 	}
 }
 static void sfs_unlink(fuse_req_t request,fuse_ino_t parent,const char *name){
-	sfs_inode_t headers
-	uint64_t index
+	sfs_inode_t headers;
+	uint64_t index;
 	//====== grab the info ======
-	uint64_t inode = inode_lookup_by_name(parent,name,headers,&index);
+	uint64_t inode = inode_lookup_by_name(parent,name,&headers,&index);
 	if (inode == (uint64_t)-1){
 		//it needs to exist to be deleted
 		fuse_reply_err(request,ENOENT);
@@ -623,16 +647,33 @@ void scheduled_unlink(void *data){
 	uint64_t pointer = typed_data->pointer;
 	uint64_t parent = typed_data->parent;
 	uint64_t inode = typed_data->inode;
-	printf("deleting inode %lu\n",inode);
-	//TODO: free all pages
+	printf("deleting inode %lu (regular file)\n",inode);
+
+	//====== free all pages it points to ======
+	//read headers
+	sfs_inode_t headers;
+	int result = sfs_read_inode_header(sfs_filesystem,inode,&headers);
+	if (result == 0){
+		for (uint64_t i = 0; i < headers.pointer_count; i++){
+			uint64_t pointer = sfs_inode_get_pointer(sfs_filesystem,inode,i);
+			if (pointer == (uint64_t)-1){
+				//if error occurs just skip it
+				continue;
+			}
+			sfs_free_page(sfs_filesystem,pointer);
+		}
+	}
 
 	//====== delete the reference in the parent ======
-	int result = sfs_inode_remove_pointer(sfs_filesystem,parent,pointer);
+	result = sfs_inode_remove_pointer(sfs_filesystem,parent,pointer);
 	if (result != 0){
 		goto end;
 	}
 	//====== free the page ======
 	sfs_free_page(sfs_filesystem,inode);
+
+	//update superblock
+	sfs_update_superblock(sfs_filesystem);
 
 	end:
 	free(data);

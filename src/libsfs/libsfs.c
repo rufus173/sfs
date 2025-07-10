@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <stddef.h>
 #include <errno.h>
 #include <string.h>
 #include <fcntl.h>
@@ -614,4 +615,16 @@ uint64_t sfs_inode_create(sfs_t *filesystem,const char *name,mode_t mode,uid_t u
 		return (uint64_t)-1;
 	}
 	return allocated_page;
+}
+int sfs_file_resize(sfs_t *filesystem,uint64_t inode,uint64_t new_size){
+	//TODO: implement
+	return -1;
+}
+size_t sfs_file_read(uint64_t inode,off_t offset,char buffer[],size_t len){
+	//TODO: implement
+	return -1;
+}
+size_t sfs_file_write(uint64_t inode,off_t offset,char buffer[],size_t len){
+	//TODO: implement
+	return -1;
 }
