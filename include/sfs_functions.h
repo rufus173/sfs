@@ -15,7 +15,6 @@ int sfs_free_page(sfs_t *filesystem,uint64_t page);
 uint64_t sfs_allocate_page(sfs_t *filesystem); 
 //places the file cursor at the begining of the given page
 int sfs_seek_to_page(sfs_t *filesystem,uint64_t page);
-int sfs_read_page(sfs_t *filesystem,uint64_t page);
 
 //====== inodes ======
 //write the sfs_inode_t to the given page (does not affect inode pointers)
@@ -45,9 +44,10 @@ uint64_t sfs_inode_create(sfs_t *filesystem,const char *name,mode_t mode,uid_t u
 
 //====== regular files ======
 //does both truncate and extending to change file size to new size
-int sfs_file_resize(sfs_t *filesystem,uint64_t inode,uint64_t new_size);
-size_t sfs_file_read(uint64_t inode,off_t offset,char buffer[],size_t len);
-size_t sfs_file_write(uint64_t inode,off_t offset,char buffer[],size_t len);
+//leave bytes to zero as -1 to fill all new spots with '\0'
+int sfs_file_resize(sfs_t *filesystem,uint64_t inode,uint64_t new_size,int64_t bytes_to_zero);
+size_t sfs_file_read(sfs_t *filesystem,uint64_t inode,off_t offset,char buffer[],size_t len);
+size_t sfs_file_write(sfs_t *filesystem,uint64_t inode,off_t offset,char buffer[],size_t len);
 
 //====== superblock ======
 //closing the filesystem calls this, but it wont hurt to call this occasionaly

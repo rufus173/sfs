@@ -15,6 +15,8 @@
 #include <endian.h>
 
 #define PERROR(str) (fprintf(stderr,"[%d] %s in %s: %s\n",__LINE__,str,__FUNCTION__,strerror(errno)))
+#define MIN(a,b) (((a) < (b)) ? (a) : (b))
+#define MAX(a,b) (((a) > (b)) ? (a) : (b))
 
 const char *sfs_errno_to_str(int result){
 	switch(result){
@@ -30,6 +32,26 @@ const char *sfs_errno_to_str(int result){
 }
 void sfs_PERROR(char *msg,int error){
 	fprintf(stderr,"%s: %s\n",msg,sfs_errno_to_str(error));
+}
+int writeall(int fd, char buffer[], size_t len){
+	for (int i = 0; i < len;){
+		int result = write(fd,buffer+i,len-i);
+		if (result < 0){
+			return -1;
+		}
+		i += result;
+	}
+	return len;
+}
+int readall(int fd, char buffer[], size_t len){
+	for (int i = 0; i < len;){
+		int result = read(fd,buffer+i,len-i);
+		if (result < 0){
+			return -1;
+		}
+		i += result;
+	}
+	return len;
 }
 
 int sfs_open_fs(sfs_t *filesystem,const char *path,int flags){
@@ -616,15 +638,136 @@ uint64_t sfs_inode_create(sfs_t *filesystem,const char *name,mode_t mode,uid_t u
 	}
 	return allocated_page;
 }
-int sfs_file_resize(sfs_t *filesystem,uint64_t inode,uint64_t new_size){
+//                       leave bytes to zero as -1 to fill all new spots with '\0'
+int sfs_file_resize(sfs_t *filesystem,uint64_t inode,uint64_t new_size,int64_t bytes_to_zero){
 	//TODO: implement
-	return -1;
+	//====== change stored size value ======
+	//read the old
+	sfs_inode_t headers;
+	if (sfs_read_inode_header(filesystem,inode,&headers) < 0) return -1;
+	//update
+	uint64_t old_size = headers.size;
+	uint64_t old_page_count = headers.pointer_count;
+	headers.size = new_size;
+	//write the new
+	if (sfs_write_inode_header(filesystem,inode,&headers) < 0) return -1;
+
+	//====== grow or shrink if necessary ======
+	uint64_t new_page_count = new_size/SFS_PAGE_SIZE + ((new_size%SFS_PAGE_SIZE) != 0);
+	if (new_page_count < old_page_count){
+		//====== shrink ======
+		for (uint64_t i = old_page_count-1; i > new_page_count-1; i--){
+			int result = sfs_inode_remove_pointer(filesystem,inode,i);
+			if (result != 0){
+				return -1;
+			}
+		}
+	}
+	if (new_size > old_size){
+		//====== grow ======
+		//add more pages if needed
+		for (uint64_t i = 0; i < old_page_count-new_page_count; i++){
+			uint64_t new_page = sfs_allocate_page(filesystem);
+			if (new_page != 0){
+				return -1;
+			}
+			int result = sfs_inode_add_pointer(filesystem,inode,new_page);
+			if (result != 0){
+				return -1;
+			}
+		}
+		//fill with '\0'
+		uint64_t bytes_left;
+		if (bytes_to_zero == -1)  bytes_left = new_size-old_size;
+		else{
+			bytes_left = MIN(new_size-old_size,bytes_to_zero);
+			new_size = old_size+bytes_to_zero;
+		}
+		for (; bytes_left > 0;){
+			uint64_t current_page = (new_size-bytes_left)/SFS_PAGE_SIZE;
+			off_t page_offset = (new_size-bytes_left)%SFS_PAGE_SIZE;
+			uint64_t bytes_to_write = MIN(SFS_PAGE_SIZE-page_offset,MIN(bytes_left,SFS_PAGE_SIZE));
+			uint64_t page = sfs_inode_get_pointer(filesystem,inode,current_page);
+			sfs_seek_to_page(filesystem,page);
+			off_t result = lseek(filesystem->filesystem_fd,SEEK_CUR,page_offset);
+			if (result == (off_t)-1){
+				perror("lseek");
+				return -1;
+			}
+			const char zeros[SFS_PAGE_SIZE] = {0};
+			result = write(filesystem->filesystem_fd,zeros,bytes_to_write);
+			if (result != 0){
+				perror("write");
+				return -1;
+			}
+			bytes_left-=bytes_to_write;
+		}
+	}
+
+	return 0;
 }
-size_t sfs_file_read(uint64_t inode,off_t offset,char buffer[],size_t len){
-	//TODO: implement
-	return -1;
+size_t sfs_file_read(sfs_t *filesystem,uint64_t inode,off_t offset,char buffer[],size_t len){
+	//====== read headers ======
+	sfs_inode_t headers;
+	if (sfs_read_inode_header(filesystem,inode,&headers) < 0) return -1;
+	uint64_t size = headers.size;
+	//====== adjust len to not overrun ======
+	if (offset+len >= size){
+		len = size-offset-1 ;
+	}
+	if (offset >= size-1){
+		//end of file
+		return 0;
+	}
+	//====== do the actual writing ======
+	for (uint64_t bytes_left = len; bytes_left > 0;){
+		uint64_t current_page = (offset+len-bytes_left)/SFS_PAGE_SIZE;
+		off_t page_offset = (offset+len-bytes_left)%SFS_PAGE_SIZE;
+		uint64_t bytes_to_write = MIN(SFS_PAGE_SIZE-offset,MIN(bytes_left,SFS_PAGE_SIZE));
+		uint64_t page = sfs_inode_get_pointer(filesystem,inode,current_page);
+		sfs_seek_to_page(filesystem,page);
+		off_t result = lseek(filesystem->filesystem_fd,SEEK_CUR,page_offset);
+		if (result == (off_t)-1){
+			perror("lseek");
+			return -1;
+		}
+		result = readall(filesystem->filesystem_fd,buffer+len-bytes_left,bytes_to_write);
+		if (result != 0){
+			perror("write");
+			return -1;
+		}
+		bytes_left-=bytes_to_write;
+	}
+	return len;
 }
-size_t sfs_file_write(uint64_t inode,off_t offset,char buffer[],size_t len){
-	//TODO: implement
-	return -1;
+size_t sfs_file_write(sfs_t *filesystem,uint64_t inode,off_t offset,char buffer[],size_t len){
+	//====== read headers ======
+	sfs_inode_t headers;
+	if (sfs_read_inode_header(filesystem,inode,&headers) < 0) return -1;
+	//update
+	uint64_t old_size = headers.size;
+	uint64_t new_size = MAX(old_size,offset+len);
+	//====== grow if required ======
+	uint64_t byte_fill = (offset <= old_size) ? 0 : offset-old_size;
+	if (new_size != old_size) sfs_file_resize(filesystem,inode,new_size,byte_fill);
+	//====== do the actual writing ======
+	for (uint64_t bytes_left = len; bytes_left > 0;){
+		uint64_t current_page = (offset+len-bytes_left)/SFS_PAGE_SIZE;
+		off_t page_offset = (offset+len-bytes_left)%SFS_PAGE_SIZE;
+		uint64_t bytes_to_write = MIN(SFS_PAGE_SIZE-offset,MIN(bytes_left,SFS_PAGE_SIZE));
+		uint64_t page = sfs_inode_get_pointer(filesystem,inode,current_page);
+		sfs_seek_to_page(filesystem,page);
+		off_t result = lseek(filesystem->filesystem_fd,SEEK_CUR,page_offset);
+		if (result == (off_t)-1){
+			perror("lseek");
+			return -1;
+		}
+		result = writeall(filesystem->filesystem_fd,buffer+len-bytes_left,bytes_to_write);
+		if (result != 0){
+			perror("write");
+			return -1;
+		}
+		bytes_left-=bytes_to_write;
+	}
+	return 0;
 }

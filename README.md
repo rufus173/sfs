@@ -32,7 +32,9 @@ This can be done through using `-f<fuse argument>`, e.g. passing `-omodules=subd
 ## To-do:
 
 ```
-implement sfs_file_resize
+sfs_file_{resize,read,write} all need proper testing
+
+
 implement inodes storing data
 	create sfs_inode_create
 	create sfs_inode_destroy
@@ -106,6 +108,17 @@ The first one is pointed to in the header page, and they each point to the next 
 A `(uint64_t)-1` in the next free page index is like the NULL at the end of a linked list, specifying there are no more after this node.
 
 # Design of the FUSE driver
+
+## Design of open file tracker
+
+Open files each have their own entry in a `TABLE` under a unique pointer stored in `fi->fh`.
+```
+struct open_file {
+	uint64_t inode;
+	int mode; //O_RDWR, O_WRONLY, O_WRONLY, O_APPEND
+};
+```
+Every time a file inode is opened, it increases the lookup count by one, and when that file closes, decreases it by one ensuring the file cannot be unlinked while open
 
 ## Inode lookup count implementation
 

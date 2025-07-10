@@ -43,7 +43,6 @@ void scheduled_rmdir(void *data);
 void scheduled_unlink(void *data);
 void atexit_cleanup();
 void bitmask_to_string(uint64_t bitmask,size_t bit_count,char buffer[65]);
-struct open_dir_tracker *initialise_open_dir_tracker();
 
 //====== prototypes for sfs_lowlevel_operations ======
 struct fuse_lowlevel_ops sfs_lowlevel_operations = {
@@ -582,7 +581,7 @@ static void sfs_setattr(fuse_req_t request,fuse_ino_t ino,struct stat *new_attr,
 	//====== resize if required ======
 	//needs to be done after the write inode headers as it also modifies the headers
 	if (to_set & FUSE_SET_ATTR_SIZE){
-		int result = sfs_file_resize(sfs_filesystem,ino,new_attr->st_size);
+		int result = sfs_file_resize(sfs_filesystem,ino,new_attr->st_size,-1);
 		if (result < 0){
 			fuse_reply_err(request,errno);
 			return;
