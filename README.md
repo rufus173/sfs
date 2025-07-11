@@ -40,6 +40,7 @@ implement mkdir and rmdir checking permitions
 implement self balancing on the binary search tree module
 implement inodes not showing up if they are scheduled for deletion
 implement on shutdown all still referenced inodes perform their destructors
+implement a malloc wrapper that calls exit on failure
 ```
 
 The filesystem is split into 1024 byte pages:

@@ -14,7 +14,7 @@
 #include <fcntl.h>
 #include <endian.h>
 
-#define PERROR(str) (fprintf(stderr,"[%d] %s in %s: %s\n",__LINE__,str,__FUNCTION__,strerror(errno)))
+#define PERROR(str) (fprintf(stderr,"[%s:%d] %s in %s: %s\n",__FILE_NAME__,__LINE__,str,__FUNCTION__,strerror(errno)))
 #define MIN(a,b) (((a) < (b)) ? (a) : (b))
 #define MAX(a,b) (((a) > (b)) ? (a) : (b))
 
@@ -691,13 +691,13 @@ int sfs_file_resize(sfs_t *filesystem,uint64_t inode,uint64_t new_size,int64_t b
 			sfs_seek_to_page(filesystem,page);
 			off_t result = lseek(filesystem->filesystem_fd,SEEK_CUR,page_offset);
 			if (result == (off_t)-1){
-				perror("lseek");
+				PERROR("lseek");
 				return -1;
 			}
 			const char zeros[SFS_PAGE_SIZE] = {0};
 			result = write(filesystem->filesystem_fd,zeros,bytes_to_write);
 			if (result != 0){
-				perror("write");
+				PERROR("write");
 				return -1;
 			}
 			bytes_left-=bytes_to_write;
@@ -719,7 +719,7 @@ size_t sfs_file_read(sfs_t *filesystem,uint64_t inode,off_t offset,char buffer[]
 		//end of file
 		return 0;
 	}
-	//====== do the actual writing ======
+	//====== do the actual reading ======
 	for (uint64_t bytes_left = len; bytes_left > 0;){
 		uint64_t current_page = (offset+len-bytes_left)/SFS_PAGE_SIZE;
 		off_t page_offset = (offset+len-bytes_left)%SFS_PAGE_SIZE;
@@ -728,19 +728,19 @@ size_t sfs_file_read(sfs_t *filesystem,uint64_t inode,off_t offset,char buffer[]
 		sfs_seek_to_page(filesystem,page);
 		off_t result = lseek(filesystem->filesystem_fd,SEEK_CUR,page_offset);
 		if (result == (off_t)-1){
-			perror("lseek");
+			PERROR("lseek");
 			return -1;
 		}
 		result = readall(filesystem->filesystem_fd,buffer+len-bytes_left,bytes_to_write);
 		if (result != 0){
-			perror("write");
+			PERROR("write");
 			return -1;
 		}
 		bytes_left-=bytes_to_write;
 	}
 	return len;
 }
-size_t sfs_file_write(sfs_t *filesystem,uint64_t inode,off_t offset,char buffer[],size_t len){
+size_t sfs_file_write(sfs_t *filesystem,uint64_t inode,off_t offset,const char buffer[],size_t len){
 	//====== read headers ======
 	sfs_inode_t headers;
 	if (sfs_read_inode_header(filesystem,inode,&headers) < 0) return -1;
@@ -757,17 +757,17 @@ size_t sfs_file_write(sfs_t *filesystem,uint64_t inode,off_t offset,char buffer[
 		uint64_t bytes_to_write = MIN(SFS_PAGE_SIZE-offset,MIN(bytes_left,SFS_PAGE_SIZE));
 		uint64_t page = sfs_inode_get_pointer(filesystem,inode,current_page);
 		sfs_seek_to_page(filesystem,page);
-		off_t result = lseek(filesystem->filesystem_fd,SEEK_CUR,page_offset);
+		off_t result = lseek(filesystem->filesystem_fd,page_offset,SEEK_CUR);
 		if (result == (off_t)-1){
-			perror("lseek");
+			PERROR("lseek");
 			return -1;
 		}
 		result = writeall(filesystem->filesystem_fd,buffer+len-bytes_left,bytes_to_write);
 		if (result != 0){
-			perror("write");
+			PERROR("write");
 			return -1;
 		}
 		bytes_left-=bytes_to_write;
 	}
-	return 0;
+	return len;
 }

@@ -47,7 +47,7 @@ uint64_t sfs_inode_create(sfs_t *filesystem,const char *name,mode_t mode,uid_t u
 //leave bytes to zero as -1 to fill all new spots with '\0'
 int sfs_file_resize(sfs_t *filesystem,uint64_t inode,uint64_t new_size,int64_t bytes_to_zero);
 size_t sfs_file_read(sfs_t *filesystem,uint64_t inode,off_t offset,char buffer[],size_t len);
-size_t sfs_file_write(sfs_t *filesystem,uint64_t inode,off_t offset,char buffer[],size_t len);
+size_t sfs_file_write(sfs_t *filesystem,uint64_t inode,off_t offset,const char buffer[],size_t len);
 
 //====== superblock ======
 //closing the filesystem calls this, but it wont hurt to call this occasionaly

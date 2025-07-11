@@ -35,6 +35,8 @@ static void sfs_setattr(fuse_req_t request,fuse_ino_t ino,struct stat *attr,int 
 static void sfs_unlink(fuse_req_t request,fuse_ino_t parent,const char *name);
 static void sfs_open(fuse_req_t request,fuse_ino_t ino, struct fuse_file_info *fi);
 static void sfs_release(fuse_req_t request,fuse_ino_t ino, struct fuse_file_info *fi);
+static void sfs_read(fuse_req_t request,fuse_ino_t ino,size_t size,off_t off,struct fuse_file_info *fi);
+static void sfs_write(fuse_req_t request,fuse_ino_t ino,const char *buffer,size_t size,off_t off,struct fuse_file_info *fi);
 int generate_and_reply_entry(fuse_req_t request,uint64_t inode);
 int referenced_inodes_bst_cmp(void *a,void *b);
 int increase_inode_ref_count(uint64_t inode, int count);
@@ -61,7 +63,9 @@ struct fuse_lowlevel_ops sfs_lowlevel_operations = {
 	.setattr = sfs_setattr,
 	.unlink = sfs_unlink,
 	.open = sfs_open,
-	.release = sfs_release
+	.release = sfs_release,
+	.read = sfs_read,
+	.write = sfs_write
 };
 
 //====== types ======
@@ -740,14 +744,15 @@ static void sfs_open(fuse_req_t request,fuse_ino_t ino, struct fuse_file_info *f
 		return;
 	}
 	//check permitions
-	int mode = fi->flags & (O_RDONLY | O_WRONLY | O_RDWR);
+	int mode = fi->flags & (O_RDONLY | O_WRONLY | O_RDWR | O_APPEND);
 	int required_permitions = 0;
 	switch (mode){
 		case O_RDONLY:
 		required_permitions = R_OK;
 		break;
 		case O_WRONLY:
-		required_permitions = R_OK;
+		case O_APPEND:
+		required_permitions = W_OK;
 		break;
 		case  O_RDWR:
 		required_permitions = R_OK | W_OK;
@@ -786,7 +791,7 @@ static void sfs_open(fuse_req_t request,fuse_ino_t ino, struct fuse_file_info *f
 		return;
 	}
 	printf("inode %lu opened with handle %d\n",ino,fh);
-	//reply with our stuff
+	//====== reply with our stuff (that is the technical term) ======
 	fuse_reply_open(request,fi);
 }
 static void sfs_release(fuse_req_t request,fuse_ino_t ino, struct fuse_file_info *fi){
@@ -796,4 +801,30 @@ static void sfs_release(fuse_req_t request,fuse_ino_t ino, struct fuse_file_info
 	table_free_index(open_file_table,fi->fh);
 	//unref
 	decrease_inode_ref_count(ino,1);
+}
+static void sfs_read(fuse_req_t request,fuse_ino_t ino,size_t size,off_t offset,struct fuse_file_info *fi){
+	printf("read requested on inode %lu with handle %lu\n",ino,fi->fh);
+	//====== read the data ======
+	//allocate a buffer
+	char *buffer = malloc(size);
+	size_t bytes_read = sfs_file_read(sfs_filesystem,ino,offset,buffer,size);
+	if (bytes_read == (size_t)-1){
+		fuse_reply_err(request,errno);
+		return;
+	}
+	//====== send of the data ======
+	fuse_reply_buf(request,buffer,bytes_read);
+	//cleanup
+	free(buffer);
+}
+static void sfs_write(fuse_req_t request,fuse_ino_t ino,const char *buffer,size_t size,off_t offset,struct fuse_file_info *fi){
+	printf("write requested on inode %lu with handle %lu\n",ino,fi->fh);
+	//TODO: reset setuid and setgid bits
+	//====== write the data ======
+	size_t bytes_written = sfs_file_write(sfs_filesystem,ino,offset,buffer,size);
+	if (bytes_written == (size_t)-1){
+		fuse_reply_err(request,errno);
+		return;
+	}
+	fuse_reply_write(request,bytes_written);
 }
