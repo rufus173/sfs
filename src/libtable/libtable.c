@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <errno.h>
 #include <string.h>
 #include "libtable.h"
 
@@ -24,7 +25,9 @@ void table_delete(TABLE *table){
 }
 int table_allocate_index(TABLE *table){
 	//check there is space
+	errno = ENOMEM;
 	if (table->first_free_index == -1) return -1;
+	errno = 0;
 	//find the next free index
 	int next_free_index = table->first_free_index;
 	//update the first free index to skip our allocated index

@@ -17,6 +17,7 @@
 #define FUSE_ROOT_INODE 1
 
 #define MAX_OPEN_DIRS 1024
+#define MAX_OPEN_FILES 1024
 
 //====== miscelanious prototypes ======
 static int sfs_stat(fuse_ino_t ino, struct stat *statbuf);
@@ -32,6 +33,8 @@ static void show_usage(char *name);
 static void sfs_mknod(fuse_req_t request, fuse_ino_t parent, const char *name, mode_t mode, dev_t rdev);
 static void sfs_setattr(fuse_req_t request,fuse_ino_t ino,struct stat *attr,int to_set,struct fuse_file_info *fi);
 static void sfs_unlink(fuse_req_t request,fuse_ino_t parent,const char *name);
+static void sfs_open(fuse_req_t request,fuse_ino_t ino, struct fuse_file_info *fi);
+static void sfs_release(fuse_req_t request,fuse_ino_t ino, struct fuse_file_info *fi);
 int generate_and_reply_entry(fuse_req_t request,uint64_t inode);
 int referenced_inodes_bst_cmp(void *a,void *b);
 int increase_inode_ref_count(uint64_t inode, int count);
@@ -56,7 +59,9 @@ struct fuse_lowlevel_ops sfs_lowlevel_operations = {
 	.rmdir = sfs_rmdir,
 	.mknod = sfs_mknod,
 	.setattr = sfs_setattr,
-	.unlink = sfs_unlink
+	.unlink = sfs_unlink,
+	.open = sfs_open,
+	.release = sfs_release
 };
 
 //====== types ======
@@ -80,11 +85,16 @@ struct cached_directory {
 	uint64_t dirent_count;
 	struct cached_dirent *dirent_array;
 };
+struct open_file {
+	uint64_t inode;
+	int mode; //O_RDWR, O_WRONLY, O_WRONLY, O_APPEND
+};
 
 //====== globals ======
 sfs_t *sfs_filesystem = NULL;
 BST *referenced_inodes;
 TABLE *cached_dirents;
+TABLE *open_file_table;
 
 int main(int argc, char **argv){
 	//====== register atexit functions ======
@@ -110,6 +120,7 @@ int main(int argc, char **argv){
 	};
 	referenced_inodes = bst_new(&bst_funcs);
 	cached_dirents = table_new(MAX_OPEN_DIRS);
+	open_file_table = table_new(MAX_OPEN_FILES);
 	
 	//====== process our custom arguments first ======
 	for (;;){
@@ -213,6 +224,7 @@ int main(int argc, char **argv){
 	printf("cleaning up data structures\n");
 	bst_delete(referenced_inodes);
 	table_delete(cached_dirents);
+	table_delete(open_file_table);
 
 	return return_val;
 }
@@ -238,6 +250,41 @@ static int sfs_stat(fuse_ino_t ino, struct stat *statbuf){
 	statbuf->st_blksize = SFS_PAGE_SIZE;
 	statbuf->st_blocks = inode.pointer_count;
 	return 0;
+}
+//1 for yes 0 for no
+int _access(uint64_t inode,int access_modes){
+	//====== read file mode ======
+	sfs_inode_t headers;
+	int result = sfs_read_inode_header(sfs_filesystem,inode,&headers);
+	if (result != 0){
+		return -1;
+	}
+	//====== check access ====== 
+	//filter out F_OK as there is no way to safely check that from here
+	access_modes &= ~(F_OK);
+	int permitions = 0;
+	//calculate user's permitions
+	if (headers.uid == getuid() || headers.gid == getgid()){
+		if (headers.uid == getuid()){
+			//user
+			if (S_IRUSR) permitions |= R_OK;
+			if (S_IWUSR) permitions |= W_OK;
+			if (S_IXUSR) permitions |= X_OK;
+		}
+		if (headers.gid == getgid()){
+			//group
+			if (S_IRGRP) permitions |= R_OK;
+			if (S_IWGRP) permitions |= W_OK;
+			if (S_IXGRP) permitions |= X_OK;
+		}
+	} else {
+		//other
+		if (S_IROTH) permitions |= R_OK;
+		if (S_IWOTH) permitions |= W_OK;
+		if (S_IXOTH) permitions |= X_OK;
+	}
+	//check users allowed permitions
+	return ((access_modes & permitions) == access_modes);
 }
 static void sfs_opendir(fuse_req_t request,fuse_ino_t ino,struct fuse_file_info *file_info){
 	printf("opendir requested on inode %lu\n",ino);
@@ -676,4 +723,77 @@ void scheduled_unlink(void *data){
 
 	end:
 	free(data);
+}
+static void sfs_open(fuse_req_t request,fuse_ino_t ino, struct fuse_file_info *fi){
+	printf("open requested on inode %lu\n",ino);
+	//====== check permitions ======
+	//read file mode
+	sfs_inode_t headers;
+	int result = sfs_read_inode_header(sfs_filesystem,ino,&headers);
+	if (result != 0){
+		fuse_reply_err(request,errno);
+		return;
+	}
+	//cannot operate on directory
+	if (S_ISDIR(headers.mode)){
+		fuse_reply_err(request,EISDIR);
+		return;
+	}
+	//check permitions
+	int mode = fi->flags & (O_RDONLY | O_WRONLY | O_RDWR);
+	int required_permitions = 0;
+	switch (mode){
+		case O_RDONLY:
+		required_permitions = R_OK;
+		break;
+		case O_WRONLY:
+		required_permitions = R_OK;
+		break;
+		case  O_RDWR:
+		required_permitions = R_OK | W_OK;
+		break;
+	}
+	int permitted = _access(ino,required_permitions);
+	//error
+	if (permitted == -1){
+		fuse_reply_err(request,errno);
+		return;
+	}
+	//permition denied
+	if (!permitted){
+		fuse_reply_err(request,EPERM);
+		return;
+	}
+
+	//====== allocate an entry ======
+	int fh = table_allocate_index(open_file_table);
+	if (fh < 0){
+		perror("table_allocate_index");
+		fuse_reply_err(request,EMFILE);
+		return;
+	}
+	//create an open_file struct
+	struct open_file *open_file = malloc(sizeof(struct open_file));
+	memset(open_file,0,sizeof(struct open_file));
+	table_set_data(open_file_table,fh,open_file);
+	open_file->inode = ino;
+	open_file->mode = mode;
+	fi->fh = fh;
+	//reference (so it cant get deleted while we hold the reference)
+	result = increase_inode_ref_count(ino,1);
+	if (result != 0){
+		fuse_reply_err(request,errno);
+		return;
+	}
+	printf("inode %lu opened with handle %d\n",ino,fh);
+	//reply with our stuff
+	fuse_reply_open(request,fi);
+}
+static void sfs_release(fuse_req_t request,fuse_ino_t ino, struct fuse_file_info *fi){
+	printf("release called on inode %lu with handle %lu\n",ino,fi->fh);
+	//free the open_file struct
+	free(table_get_data(open_file_table,fi->fh));
+	table_free_index(open_file_table,fi->fh);
+	//unref
+	decrease_inode_ref_count(ino,1);
 }

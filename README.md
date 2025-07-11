@@ -36,12 +36,10 @@ sfs_file_{resize,read,write} all need proper testing
 
 
 implement inodes storing data
-	create sfs_inode_create
-	create sfs_inode_destroy
-implement setattr and unlink
+implement mkdir and rmdir checking permitions
 implement self balancing on the binary search tree module
 implement inodes not showing up if they are scheduled for deletion
-call sfs_update_superblock after mkdir, rmdir, unlink and mknod
+implement on shutdown all still referenced inodes perform their destructors
 ```
 
 The filesystem is split into 1024 byte pages:
