@@ -16,6 +16,12 @@ uint64_t sfs_allocate_page(sfs_t *filesystem);
 //places the file cursor at the begining of the given page
 int sfs_seek_to_page(sfs_t *filesystem,uint64_t page);
 
+//--- offset finding ---
+//successor to sfs_seek_to_page
+uint64_t sfs_page_offset(sfs_t *filesystem,uint64_t page);
+//successor to sfs_seek_to_inode
+uint64_t sfs_inode_pointer_offset(sfs_t *filesystem,uint64_t inode,uint64_t index);
+
 //====== inodes ======
 //write the sfs_inode_t to the given page (does not affect inode pointers)
 //both the read and write functions correct endianness from machine to be automaticaly
@@ -46,6 +52,7 @@ uint64_t sfs_inode_create(sfs_t *filesystem,const char *name,mode_t mode,uid_t u
 //does both truncate and extending to change file size to new size
 //leave bytes to zero as -1 to fill all new spots with '\0'
 int sfs_file_resize(sfs_t *filesystem,uint64_t inode,uint64_t new_size,int64_t bytes_to_zero);
+//read and write return (size_t)-1 on error
 size_t sfs_file_read(sfs_t *filesystem,uint64_t inode,off_t offset,char buffer[],size_t len);
 size_t sfs_file_write(sfs_t *filesystem,uint64_t inode,off_t offset,const char buffer[],size_t len);
 
