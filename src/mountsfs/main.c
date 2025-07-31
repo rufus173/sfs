@@ -65,7 +65,7 @@ struct fuse_lowlevel_ops sfs_lowlevel_operations = {
 	.open = sfs_open,
 	.release = sfs_release,
 	.read = sfs_read,
-	.write = sfs_write
+	.write = sfs_write,
 };
 
 //====== types ======
@@ -757,6 +757,10 @@ static void sfs_open(fuse_req_t request,fuse_ino_t ino, struct fuse_file_info *f
 		case  O_RDWR:
 		required_permitions = R_OK | W_OK;
 		break;
+		default:
+		//unknown option
+		fuse_reply_err(request,ENOTSUP);
+		return;
 	}
 	int permitted = _access(ino,required_permitions);
 	//error
@@ -784,6 +788,11 @@ static void sfs_open(fuse_req_t request,fuse_ino_t ino, struct fuse_file_info *f
 	open_file->inode = ino;
 	open_file->mode = mode;
 	fi->fh = fh;
+	//directo io
+	fi->direct_io = 1;
+	//dont rely on previous cache if file opened in write mode
+	if (mode & O_WRONLY) fi->keep_cache = 0;
+	else fi->keep_cache = 0;
 	//reference (so it cant get deleted while we hold the reference)
 	result = increase_inode_ref_count(ino,1);
 	if (result != 0){
@@ -810,6 +819,7 @@ static void sfs_read(fuse_req_t request,fuse_ino_t ino,size_t size,off_t offset,
 	size_t bytes_read = sfs_file_read(sfs_filesystem,ino,offset,buffer,size);
 	if (bytes_read == (size_t)-1){
 		fuse_reply_err(request,errno);
+		free(buffer);
 		return;
 	}
 	//====== send of the data ======
