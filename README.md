@@ -33,10 +33,7 @@ This can be done through using `-f<fuse argument>`, e.g. passing `-omodules=subd
 
 ```
 sfs_file_{resize,read,write} all need proper testing
-implement access
 
-
-implement inodes storing data
 implement mkdir and rmdir checking permitions
 implement self balancing on the binary search tree module
 implement inodes not showing up if they are scheduled for deletion
@@ -46,6 +43,12 @@ change mksfs.sfs to create the free pages linked list in reverse so the lower nu
 ```
 
 The filesystem is split into 1024 byte pages:
+
+## Progress report
+
+The filesystem vaguely works, with basic commands such as `ls`, `cat` and `echo "abc" >> def` working, but text editors such as vim and nano do not work.
+They seem to have issues with swapfiles, down to maybe `lookup` or `access`.
+Performing `rm` on multiple files seems to cause a segmentation fault, but doing so individually does not.
 
 ## general information
 
