@@ -768,7 +768,7 @@ size_t sfs_file_read(sfs_t *filesystem,uint64_t inode,off_t offset,char buffer[]
 	uint64_t size = headers.size;
 	//====== adjust len to not overrun ======
 	if (offset+len >= size){
-		len = size-offset-1 ;
+		len = size-offset ;
 	}
 	if (offset >= size-1){
 		//end of file

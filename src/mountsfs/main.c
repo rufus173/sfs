@@ -744,20 +744,12 @@ static void sfs_open(fuse_req_t request,fuse_ino_t ino, struct fuse_file_info *f
 		return;
 	}
 	//check permitions
-	int mode = fi->flags & (O_RDONLY | O_WRONLY | O_RDWR | O_APPEND);
+	int mode = fi->flags & (O_RDONLY | O_WRONLY | O_RDWR);
 	int required_permitions = 0;
-	switch (mode){
-		case O_RDONLY:
-		required_permitions = R_OK;
-		break;
-		case O_WRONLY:
-		case O_APPEND:
-		required_permitions = W_OK;
-		break;
-		case  O_RDWR:
-		required_permitions = R_OK | W_OK;
-		break;
-		default:
+	if (mode == O_RDONLY) required_permitions = R_OK;
+	else if (mode == O_WRONLY) required_permitions = W_OK;
+	else if (mode & O_RDWR)required_permitions = R_OK | W_OK;
+	else{
 		//unknown option
 		fuse_reply_err(request,ENOTSUP);
 		return;
@@ -786,7 +778,7 @@ static void sfs_open(fuse_req_t request,fuse_ino_t ino, struct fuse_file_info *f
 	memset(open_file,0,sizeof(struct open_file));
 	table_set_data(open_file_table,fh,open_file);
 	open_file->inode = ino;
-	open_file->mode = mode;
+	open_file->mode = fi->flags & (O_RDONLY | O_WRONLY | O_RDWR | O_APPEND);
 	fi->fh = fh;
 	//directo io
 	fi->direct_io = 1;
@@ -816,6 +808,7 @@ static void sfs_read(fuse_req_t request,fuse_ino_t ino,size_t size,off_t offset,
 	//====== read the data ======
 	//allocate a buffer
 	char *buffer = malloc(size);
+	memset(buffer,0,size);
 	size_t bytes_read = sfs_file_read(sfs_filesystem,ino,offset,buffer,size);
 	if (bytes_read == (size_t)-1){
 		fuse_reply_err(request,errno);
@@ -828,6 +821,23 @@ static void sfs_read(fuse_req_t request,fuse_ino_t ino,size_t size,off_t offset,
 	free(buffer);
 }
 static void sfs_write(fuse_req_t request,fuse_ino_t ino,const char *buffer,size_t size,off_t offset,struct fuse_file_info *fi){
+	//====== check for append mode ======
+	//read open modes
+	struct open_file *open_file = table_get_data(open_file_table,fi->fh);
+	if (open_file == NULL){
+		perror("table_get_data");
+		fuse_reply_err(request,errno);
+	}
+	if (open_file->mode & O_APPEND){
+		//set the offset to the end of the file
+		sfs_inode_t headers;
+		int result = sfs_read_inode_header(sfs_filesystem,open_file->inode,&headers);
+		if (result != 0){
+			fuse_reply_err(request,errno);
+		}
+		offset = headers.size;
+	}
+
 	printf("write requested on inode %lu with handle %lu\n",ino,fi->fh);
 	//TODO: reset setuid and setgid bits
 	//====== write the data ======
