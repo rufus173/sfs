@@ -37,6 +37,7 @@ static void sfs_open(fuse_req_t request,fuse_ino_t ino, struct fuse_file_info *f
 static void sfs_release(fuse_req_t request,fuse_ino_t ino, struct fuse_file_info *fi);
 static void sfs_read(fuse_req_t request,fuse_ino_t ino,size_t size,off_t off,struct fuse_file_info *fi);
 static void sfs_write(fuse_req_t request,fuse_ino_t ino,const char *buffer,size_t size,off_t off,struct fuse_file_info *fi);
+static void sfs_access(fuse_req_t request, fuse_ino_t ino, int mask);
 int generate_and_reply_entry(fuse_req_t request,uint64_t inode);
 int referenced_inodes_bst_cmp(void *a,void *b);
 int increase_inode_ref_count(uint64_t inode, int count);
@@ -66,6 +67,7 @@ struct fuse_lowlevel_ops sfs_lowlevel_operations = {
 	.release = sfs_release,
 	.read = sfs_read,
 	.write = sfs_write,
+	.access = sfs_access,
 };
 
 //====== types ======
@@ -263,6 +265,7 @@ int _access(uint64_t inode,int access_modes){
 	if (result != 0){
 		return -1;
 	}
+	int file_mode = headers.mode;
 	//====== check access ====== 
 	//filter out F_OK as there is no way to safely check that from here
 	access_modes &= ~(F_OK);
@@ -271,21 +274,21 @@ int _access(uint64_t inode,int access_modes){
 	if (headers.uid == getuid() || headers.gid == getgid()){
 		if (headers.uid == getuid()){
 			//user
-			if (S_IRUSR) permitions |= R_OK;
-			if (S_IWUSR) permitions |= W_OK;
-			if (S_IXUSR) permitions |= X_OK;
+			if (file_mode & S_IRUSR) permitions |= R_OK;
+			if (file_mode & S_IWUSR) permitions |= W_OK;
+			if (file_mode & S_IXUSR) permitions |= X_OK;
 		}
 		if (headers.gid == getgid()){
 			//group
-			if (S_IRGRP) permitions |= R_OK;
-			if (S_IWGRP) permitions |= W_OK;
-			if (S_IXGRP) permitions |= X_OK;
+			if (file_mode & S_IRGRP) permitions |= R_OK;
+			if (file_mode & S_IWGRP) permitions |= W_OK;
+			if (file_mode & S_IXGRP) permitions |= X_OK;
 		}
 	} else {
 		//other
-		if (S_IROTH) permitions |= R_OK;
-		if (S_IWOTH) permitions |= W_OK;
-		if (S_IXOTH) permitions |= X_OK;
+		if (file_mode & S_IROTH) permitions |= R_OK;
+		if (file_mode & S_IWOTH) permitions |= W_OK;
+		if (file_mode & S_IXOTH) permitions |= X_OK;
 	}
 	//check users allowed permitions
 	return ((access_modes & permitions) == access_modes);
@@ -847,4 +850,9 @@ static void sfs_write(fuse_req_t request,fuse_ino_t ino,const char *buffer,size_
 		return;
 	}
 	fuse_reply_write(request,bytes_written);
+}
+static void sfs_access(fuse_req_t request, fuse_ino_t ino, int mask){
+	printf("access called on %lu\n",ino);
+	if (!_access(ino,mask)) fuse_reply_err(request,EACCES);
+	else fuse_reply_err(request,0);
 }

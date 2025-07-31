@@ -32,8 +32,8 @@ This can be done through using `-f<fuse argument>`, e.g. passing `-omodules=subd
 ## To-do:
 
 ```
-fix sfs_read returning one less byte than the end of the file
 sfs_file_{resize,read,write} all need proper testing
+implement access
 
 
 implement inodes storing data
