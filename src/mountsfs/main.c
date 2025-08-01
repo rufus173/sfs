@@ -403,7 +403,7 @@ static void sfs_mkdir(fuse_req_t request,fuse_ino_t parent,const char *name,mode
 	}
 	//====== create the new inode ======
 	uint64_t new_inode = sfs_inode_create(sfs_filesystem,name,mode | S_IFDIR,getuid(),getgid(),parent);
-	if (new_inode != (uint64_t)-1){
+	if (new_inode == (uint64_t)-1){
 		fuse_reply_err(request,errno);
 		return;
 	}
