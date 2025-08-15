@@ -313,13 +313,35 @@ static void sfs_opendir(fuse_req_t request,fuse_ino_t ino,struct fuse_file_info 
 	directory_cache->dirent_count = inode.pointer_count;
 	directory_cache->dirent_array = malloc(sizeof(struct cached_dirent)*inode.pointer_count);
 	//====== cache all the dirents ======
+	uint64_t dirent_index = 0; //may differ from pointer_index as it takes into account invisible inodes that have a referenced destructor but havent been deleted yet
 	for (uint64_t pointer_index = 0; pointer_index < inode.pointer_count; pointer_index++){
 		uint64_t dirent = sfs_inode_get_pointer(sfs_filesystem,ino,pointer_index);
-		assert(sfs_stat(dirent,&directory_cache->dirent_array[pointer_index].statbuf) == 0);
+		if (dirent == (uint64_t)-1){
+			perror("sfs_inode_get_pointer");
+			fuse_reply_err(request,errno);
+		}
+		//------ dont add the inode if it has a destructor queued ------
+		struct referenced_inode referenced_inode_to_match;
+		memset(&referenced_inode_to_match,0,sizeof(struct referenced_inode));
+		referenced_inode_to_match.inode = dirent;
+		struct bst_node *bst_node = bst_find_node(referenced_inodes,&referenced_inode_to_match);
+		if (bst_node != NULL){
+			//dont add it if it has a scheduled destructor
+			struct referenced_inode *node = bst_node->data;
+			if (node->destructor != NULL){
+				directory_cache->dirent_count--;
+				continue;
+			}
+		}
 		//read the name
+		if (sfs_stat(dirent,&directory_cache->dirent_array[dirent_index].statbuf) != 0){
+			fuse_reply_err(request,2); //no such file or directory
+			return;
+		}
 		sfs_inode_t inode;
 		assert(sfs_read_inode_header(sfs_filesystem,dirent,&inode) == 0);
-		memcpy(directory_cache->dirent_array[pointer_index].name,inode.name,SFS_MAX_FILENAME_SIZE);
+		memcpy(directory_cache->dirent_array[dirent_index].name,inode.name,SFS_MAX_FILENAME_SIZE);
+		dirent_index++;
 		printf("%lu [%s]\n",dirent,inode.name);
 	}
 
@@ -384,6 +406,19 @@ static void sfs_lookup(fuse_req_t request,fuse_ino_t parent,const char *name){
 		assert(sfs_read_inode_header(sfs_filesystem,sub_inode_pointer,&sub_inode) == 0);
 		if (strcmp(sub_inode.name,name) == 0){
 			//====== directory found ======
+			//check if destructor is queued
+			struct referenced_inode referenced_inode_to_match;
+			memset(&referenced_inode_to_match,0,sizeof(struct referenced_inode));
+			referenced_inode_to_match.inode = sub_inode_pointer;
+			struct bst_node *bst_node = bst_find_node(referenced_inodes,&referenced_inode_to_match);
+			if (bst_node != NULL){
+				//if it is, dont show it 
+				struct referenced_inode *node = bst_node->data;
+				if (node->destructor != NULL){
+					fuse_reply_err(request,ENOENT);
+					return;
+				}
+			}
 			//generate the dir entry
 			int result = generate_and_reply_entry(request,sub_inode_pointer);
 			if (result != 0){

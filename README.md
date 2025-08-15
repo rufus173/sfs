@@ -36,10 +36,11 @@ sfs_file_{resize,read,write} all need proper testing
 
 implement mkdir and rmdir checking permitions
 implement self balancing on the binary search tree module
-implement inodes not showing up if they are scheduled for deletion
-implement on shutdown all still referenced inodes perform their destructors
 implement a malloc wrapper that calls exit on failure
 change mksfs.sfs to create the free pages linked list in reverse so the lower number pages are used first
+
+test inodes not showing up if they are scheduled for deletion
+test on shutdown all still referenced inodes perform their destructors
 ```
 
 The filesystem is split into 1024 byte pages:
