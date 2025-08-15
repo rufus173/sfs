@@ -33,7 +33,7 @@ const char *sfs_errno_to_str(int result){
 void sfs_PERROR(char *msg,int error){
 	fprintf(stderr,"%s: %s\n",msg,sfs_errno_to_str(error));
 }
-int writeall(int fd, const char buffer[], size_t len, uint64_t offset){
+int writeall(int fd, const void *buffer, size_t len, uint64_t offset){
 	for (int i = 0; i < len;){
 		int result = pwrite(fd,buffer+i,len-i,offset);
 		if (result < 0){
@@ -44,7 +44,7 @@ int writeall(int fd, const char buffer[], size_t len, uint64_t offset){
 	}
 	return len;
 }
-int readall(int fd, char buffer[], size_t len, uint64_t offset){
+int readall(int fd, void *buffer, size_t len, uint64_t offset){
 	for (int i = 0; i < len;){
 		int result = pread(fd,buffer+i,len-i,offset);
 		if (result < 0){
@@ -417,7 +417,7 @@ uint64_t sfs_inode_pointer_offset(sfs_t *filesystem,uint64_t inode,uint64_t inde
 		//can we reach the next page?
 		if (current_inode.next_page == (uint64_t)-1){
 			errno = EFAULT;
-			PERROR("sfs_inode_get_pointer");
+			PERROR("sfs_inode_pointer_offset");
 			return -1;
 		}
 		current_page = current_inode.next_page;
@@ -478,27 +478,27 @@ int sfs_inode_seek_to_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index){
 	return 0;
 }
 uint64_t sfs_inode_get_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index){
-	int result = sfs_inode_seek_to_pointer(filesystem,inode,index);
-	if (result < 0){
+	uint64_t offset = sfs_inode_pointer_offset(filesystem,inode,index);
+	if (offset == (uint64_t)-1){
 		return -1;
 	}
 	//====== read the pointer ======
 	uint64_t pointer;
-	result = read(filesystem->filesystem_fd,&pointer,sizeof(pointer));
+	int result = readall(filesystem->filesystem_fd,&pointer,sizeof(pointer),offset);
 	if (result < 0){
 		return (uint64_t)-1;
 	}
 	return be64toh(pointer);
 }
 int sfs_inode_set_pointer(sfs_t *filesystem,uint64_t inode,uint64_t index,uint64_t pointer){
-	int result = sfs_inode_seek_to_pointer(filesystem,inode,index);
-	if (result < 0){
+	uint64_t offset = sfs_inode_pointer_offset(filesystem,inode,index);
+	if (offset == (uint64_t)-1){
 		return -1;
 	}
 	//====== write the pointer ======
 	//correct endianness
 	uint64_t corrected_pointer = htobe64(pointer);
-	result = write(filesystem->filesystem_fd,&corrected_pointer,sizeof(pointer));
+	int result = writeall(filesystem->filesystem_fd,&corrected_pointer,sizeof(corrected_pointer),offset);
 	if (result < 0){
 		return -1;
 	}
@@ -807,6 +807,7 @@ size_t sfs_file_write(sfs_t *filesystem,uint64_t inode,off_t offset,const char b
 		off_t page_offset = (offset+len-bytes_left)%SFS_PAGE_SIZE;
 		uint64_t bytes_to_write = MIN(SFS_PAGE_SIZE-offset,MIN(bytes_left,SFS_PAGE_SIZE));
 		uint64_t page = sfs_inode_get_pointer(filesystem,inode,current_page);
+		if (page == -1) return -1;
 		uint64_t filesystem_offset = sfs_page_offset(filesystem,page);
 		if (filesystem_offset == -1) return -1;
 		uint64_t offset = filesystem_offset+page_offset;

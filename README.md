@@ -34,7 +34,6 @@ This can be done through using `-f<fuse argument>`, e.g. passing `-omodules=subd
 ```
 sfs_file_{resize,read,write} all need proper testing
 
-implement mkdir and rmdir checking permitions
 implement self balancing on the binary search tree module
 implement a malloc wrapper that calls exit on failure
 change mksfs.sfs to create the free pages linked list in reverse so the lower number pages are used first
