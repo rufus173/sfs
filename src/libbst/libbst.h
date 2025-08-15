@@ -29,5 +29,6 @@ struct bst_node *bst_new_node(BST *bst,void *data);
 void bst_print_nodes_inorder(BST *bst);
 int bst_delete_node(BST *bst,struct bst_node *node);
 struct bst_node *bst_find_node(BST *bst,void *data);
+void bst_foreach(BST *bst,void (*func)(void *,void *),void *user_data);
 
 #endif

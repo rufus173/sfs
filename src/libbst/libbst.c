@@ -166,3 +166,13 @@ struct bst_node *bst_find_node(BST *bst,void *data){
 	}
 	return NULL;
 }
+
+static void _bst_foreach_recursive(struct bst_node *node,void (*func)(void *,void *),void *user_data){
+	if (node == NULL) return;
+	_bst_foreach_recursive(node->left,func,user_data);
+	func(node->data,user_data);
+	_bst_foreach_recursive(node->right,func,user_data);
+}
+void bst_foreach(BST *bst,void (*func)(void *,void *),void *user_data){
+	_bst_foreach_recursive(bst->root,func,user_data);
+}
