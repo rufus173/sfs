@@ -204,6 +204,10 @@ You can call `bst_delete_all_nodes()` to delete all the nodes in a tree but keep
 
 Given a data pointer, it will insert it into the correct position in the tree
 
+## Using `bst_foreach()`
+
+You pass it the bst pointer, a function pointer with 2 arguments `(void *node_data,void *user_data)` and a void pointer that is passed to every subsequent call of your function, where it is called on every node in an inorder traversal.
+
 ## Relevant data structures
 
 
