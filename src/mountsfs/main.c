@@ -48,6 +48,7 @@ uint64_t inode_lookup_by_name(uint64_t parent,const char *name,sfs_inode_t *inod
 void scheduled_rmdir(void *data);
 void scheduled_unlink(void *data);
 void atexit_cleanup();
+void referenced_inode_call_destructor(void *date,void *user_data);
 void bitmask_to_string(uint64_t bitmask,size_t bit_count,char buffer[65]);
 
 //====== prototypes for sfs_lowlevel_operations ======
@@ -227,7 +228,8 @@ int main(int argc, char **argv){
 
 	//actual filesystem closed during atexit() function
 
-	printf("cleaning up data structures\n");
+	printf("====== cleaning up data structures ======\n");
+	bst_foreach(referenced_inodes,referenced_inode_call_destructor,NULL);//no user data needs to be passed so have it as NULL
 	bst_delete(referenced_inodes);
 	table_delete(cached_dirents);
 	table_delete(open_file_table);
@@ -466,6 +468,8 @@ int decrease_inode_ref_count(uint64_t inode, int count){
 		//call the destructor if there is one
 		if (ref_node->destructor != NULL){
 			ref_node->destructor(ref_node->data);
+			ref_node->destructor = NULL;
+			ref_node->data = NULL;
 		}
 		//remove the ref node from the bst
 		bst_delete_node(referenced_inodes,bst_node);
@@ -855,4 +859,12 @@ static void sfs_access(fuse_req_t request, fuse_ino_t ino, int mask){
 	printf("access called on %lu\n",ino);
 	if (!_access(ino,mask)) fuse_reply_err(request,EACCES);
 	else fuse_reply_err(request,0);
+}
+void referenced_inode_call_destructor(void *data,void *user_data){//user data is optional, and when this is called we simply pass it NULL
+	struct referenced_inode *ref_node = data;
+	printf("forgettting leftover inode %lu\n",ref_node->inode);
+	//call the destructor if it has not already happened
+	if (ref_node->destructor != NULL){
+		ref_node->destructor(ref_node->data);
+	}
 }
