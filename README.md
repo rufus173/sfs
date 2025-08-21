@@ -37,9 +37,6 @@ sfs_file_{resize,read,write} all need proper testing
 implement self balancing on the binary search tree module
 implement a malloc wrapper that calls exit on failure
 change mksfs.sfs to create the free pages linked list in reverse so the lower number pages are used first
-
-test inodes not showing up if they are scheduled for deletion
-test on shutdown all still referenced inodes perform their destructors
 ```
 
 The filesystem is split into 1024 byte pages:
@@ -48,7 +45,11 @@ The filesystem is split into 1024 byte pages:
 
 The filesystem vaguely works, with basic commands such as `ls`, `cat` and `echo "abc" >> def` working, but text editors such as vim and nano do not work.
 They seem to have issues with swapfiles, down to maybe `lookup` or `access`.
+UPDATE: nano now works (vim untested)
 Performing `rm` on multiple files seems to cause a segmentation fault, but doing so individually does not.
+UPDATE: fixed?
+Sometimes after a swap file has been deleted and recreated, fuse does not call unlink, but rm and unlink both show no errors
+Fixed binary search tree issue where I copy-pasted code and didn't change left to right
 
 ## general information
 

@@ -243,7 +243,7 @@ int sfs_write_inode_header(sfs_t *filesystem,uint64_t page,sfs_inode_t *inode){
 	int fd = filesystem->filesystem_fd;
 	//====== copy and correct endianness ======
 	//we dont want to modify the users struct
-	sfs_inode_t inode_cpy;
+	sfs_inode_t inode_cpy = {};
 	memcpy(&inode_cpy,inode,sizeof(sfs_inode_t));
 	inode_cpy.page = htobe64(inode_cpy.page);
 	inode_cpy.parent_inode_pointer = htobe64(inode_cpy.parent_inode_pointer);

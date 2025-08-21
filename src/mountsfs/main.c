@@ -38,6 +38,7 @@ static void sfs_release(fuse_req_t request,fuse_ino_t ino, struct fuse_file_info
 static void sfs_read(fuse_req_t request,fuse_ino_t ino,size_t size,off_t off,struct fuse_file_info *fi);
 static void sfs_write(fuse_req_t request,fuse_ino_t ino,const char *buffer,size_t size,off_t off,struct fuse_file_info *fi);
 static void sfs_access(fuse_req_t request, fuse_ino_t ino, int mask);
+static void sfs_forget_multi(fuse_req_t request,size_t count,struct fuse_forget_data *forgets);
 int generate_and_reply_entry(fuse_req_t request,uint64_t inode);
 int referenced_inodes_bst_cmp(void *a,void *b);
 int increase_inode_ref_count(uint64_t inode, int count);
@@ -59,6 +60,7 @@ struct fuse_lowlevel_ops sfs_lowlevel_operations = {
 	.getattr = sfs_getattr,
 	.lookup = sfs_lookup,
 	.forget = sfs_forget,
+	//.forget_multi = sfs_forget_multi,
 	.mkdir = sfs_mkdir,
 	.rmdir = sfs_rmdir,
 	.mknod = sfs_mknod,
@@ -412,11 +414,10 @@ static void sfs_lookup(fuse_req_t request,fuse_ino_t parent,const char *name){
 			referenced_inode_to_match.inode = sub_inode_pointer;
 			struct bst_node *bst_node = bst_find_node(referenced_inodes,&referenced_inode_to_match);
 			if (bst_node != NULL){
-				//if it is, dont show it 
+				//if it is, act like it doesnt exist
 				struct referenced_inode *node = bst_node->data;
 				if (node->destructor != NULL){
-					fuse_reply_err(request,ENOENT);
-					return;
+					continue;
 				}
 			}
 			//generate the dir entry
@@ -485,6 +486,9 @@ int increase_inode_ref_count(uint64_t inode, int count){
 	return 0;
 }
 int decrease_inode_ref_count(uint64_t inode, int count){
+	printf("====== reference counts ======\n");
+	bst_print_nodes_inorder(referenced_inodes);
+	printf("====== end reference counts ======\n");
 	//====== locate the inode in the bst ======
 	struct referenced_inode referenced_inode_to_match;
 	memset(&referenced_inode_to_match,0,sizeof(struct referenced_inode));
@@ -502,6 +506,7 @@ int decrease_inode_ref_count(uint64_t inode, int count){
 		//====== inode reference count reached zero ======
 		//call the destructor if there is one
 		if (ref_node->destructor != NULL){
+			printf("calling inode %lu's destructor\n",inode);
 			ref_node->destructor(ref_node->data);
 			ref_node->destructor = NULL;
 			ref_node->data = NULL;
@@ -509,12 +514,15 @@ int decrease_inode_ref_count(uint64_t inode, int count){
 		//remove the ref node from the bst
 		bst_delete_node(referenced_inodes,bst_node);
 	}
-
 	return 0;
 }
 void print_referenced_inode(void *data){
 	struct referenced_inode *inode_reference = data;
-	printf("(inode %lu - %d)\n",inode_reference->inode,inode_reference->reference_count);
+	sfs_inode_t header;
+	if (sfs_read_inode_header(sfs_filesystem,inode_reference->inode,&header) == 0){
+
+		printf("(inode %lu [%s] - %d | visible = %d)\n",inode_reference->inode,header.name,inode_reference->reference_count,(inode_reference->destructor == NULL));
+	}
 }
 //good luck exausting 18446744073709551615 runids
 uint64_t generate_unique_runid(){
@@ -894,6 +902,7 @@ static void sfs_access(fuse_req_t request, fuse_ino_t ino, int mask){
 	printf("access called on %lu\n",ino);
 	if (!_access(ino,mask)) fuse_reply_err(request,EACCES);
 	else fuse_reply_err(request,0);
+	//else fuse_reply_none(request);
 }
 void referenced_inode_call_destructor(void *data,void *user_data){//user data is optional, and when this is called we simply pass it NULL
 	struct referenced_inode *ref_node = data;
@@ -902,4 +911,8 @@ void referenced_inode_call_destructor(void *data,void *user_data){//user data is
 	if (ref_node->destructor != NULL){
 		ref_node->destructor(ref_node->data);
 	}
+}
+static void sfs_forget_multi(fuse_req_t request,size_t count,struct fuse_forget_data *forgets){
+	printf("------ forget multi called\n");
+	fuse_reply_none(request);
 }
