@@ -159,8 +159,8 @@ struct bst_node *bst_find_node(BST *bst,void *data){
 			if (current_node->left == NULL) return NULL;
 			else current_node = current_node->left;
 		}
-		else if (bst->user_functions->datacmp(current_node->data,data) > 0){
-			if (current_node->left == NULL) return NULL;
+		else{
+			if (current_node->right == NULL) return NULL;
 			else current_node = current_node->right;
 		}
 	}
