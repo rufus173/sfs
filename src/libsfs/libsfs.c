@@ -778,7 +778,7 @@ size_t sfs_file_read(sfs_t *filesystem,uint64_t inode,off_t offset,char buffer[]
 	for (uint64_t bytes_left = len; bytes_left > 0;){
 		uint64_t current_page = (offset+len-bytes_left)/SFS_PAGE_SIZE;
 		off_t page_offset = (offset+len-bytes_left)%SFS_PAGE_SIZE;
-		uint64_t bytes_to_write = MIN(SFS_PAGE_SIZE-offset,MIN(bytes_left,SFS_PAGE_SIZE));
+		uint64_t bytes_to_write = MIN(SFS_PAGE_SIZE-page_offset,MIN(bytes_left,SFS_PAGE_SIZE));
 		uint64_t page = sfs_inode_get_pointer(filesystem,inode,current_page);
 		uint64_t filesystem_offset = sfs_page_offset(filesystem,page);
 		if (filesystem_offset == -1) return -1;
@@ -805,7 +805,7 @@ size_t sfs_file_write(sfs_t *filesystem,uint64_t inode,off_t offset,const char b
 	for (uint64_t bytes_left = len; bytes_left > 0;){
 		uint64_t current_page = (offset+len-bytes_left)/SFS_PAGE_SIZE;
 		off_t page_offset = (offset+len-bytes_left)%SFS_PAGE_SIZE;
-		uint64_t bytes_to_write = MIN(SFS_PAGE_SIZE-offset,MIN(bytes_left,SFS_PAGE_SIZE));
+		uint64_t bytes_to_write = MIN(SFS_PAGE_SIZE-page_offset,MIN(bytes_left,SFS_PAGE_SIZE));
 		uint64_t page = sfs_inode_get_pointer(filesystem,inode,current_page);
 		if (page == -1) return -1;
 		uint64_t filesystem_offset = sfs_page_offset(filesystem,page);
